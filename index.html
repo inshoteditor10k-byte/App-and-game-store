@@ -4,10 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>App Plus Game Store</title>
-<!-- Firebase SDKs (Zaroori hain online database ke liye) -->
+<!-- Firebase SDKs -->
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-storage-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script> <!-- Auth Added -->
 
 <style>
     :root {
@@ -67,6 +68,42 @@
     .btn-danger { background: #ff4444; color: white; }
     .btn-success { background: var(--secondary); color: white; }
     .btn:hover { transform: translateY(-2px); opacity: 0.9; }
+
+    /* Login Screen Styles */
+    #authScreen {
+        height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: linear-gradient(135deg, #121212, #2d2d2d);
+    }
+    .auth-box {
+        background: var(--card-light);
+        padding: 2rem;
+        border-radius: 20px;
+        width: 90%;
+        max-width: 400px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        text-align: center;
+    }
+    .auth-box h1 { color: var(--primary); margin-bottom: 5px; }
+    .auth-box input {
+        width: 100%; padding: 12px; margin: 10px 0;
+        border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box;
+    }
+    .btn-google {
+        background: white; color: #333; border: 1px solid #ccc;
+        width: 100%; margin-top: 15px; display: flex; justify-content: center; gap: 10px;
+    }
+    
+    /* Profile Styles */
+    .profile-avatar { width: 40px; height: 40px; border-radius: 50%; cursor: pointer; object-fit: cover; border: 2px solid var(--primary); }
+    .stat-box {
+        background: rgba(255, 153, 51, 0.1);
+        padding: 15px; border-radius: 10px;
+        text-align: center; flex: 1;
+        border: 1px solid var(--primary);
+    }
 
     /* Header */
     header {
@@ -210,45 +247,123 @@
 </head>
 <body>
 
-<!-- Header -->
-<header>
-    <div class="logo">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zm0 9l2.5-1.25L12 8.5l-2.5 1.25L12 11zm0 2.5l-5-2.5-5 2.5L12 22l10-8.5-5-2.5-5 2.5z"/></svg>
-        AppPlus <span>Store</span>
-    </div>
-    <div class="search-bar">
-        <input type="text" id="searchInput" placeholder="Search by tags (e.g., Action, Tool, AI)..." onkeyup="handleSearch()">
-    </div>
-    <div style="display:flex; gap:10px; align-items:center;">
-        <button class="btn btn-secondary" onclick="toggleTheme()" id="themeBtn">🌙</button>
-        <button class="btn btn-primary" onclick="openUploadModal()">Submit App</button>
-    </div>
-</header>
+<!-- AUTH SCREEN (Login) -->
+<div id="authScreen">
+    <div class="auth-box">
+        <div class="logo" style="justify-content:center; margin-bottom:20px;">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zm0 9l2.5-1.25L12 8.5l-2.5 1.25L12 11zm0 2.5l-5-2.5-5 2.5L12 22l10-8.5-5-2.5-5 2.5z"/></svg>
+            AppPlus <span>Store</span>
+        </div>
+        
+        <!-- Login Form -->
+        <div id="loginForm">
+            <h3>Welcome Back</h3>
+            <input type="email" id="loginEmail" placeholder="Email Address">
+            <input type="password" id="loginPass" placeholder="Password">
+            <button class="btn btn-primary" onclick="emailLogin()" style="width:100%">Login</button>
+            <p style="font-size:0.9rem;">New here? <a href="#" onclick="toggleAuthMode()" style="color:var(--primary);">Sign Up</a></p>
+        </div>
 
-<!-- Main Content -->
-<main id="mainView">
-    <!-- Hero/Featured -->
-    <div class="section-title">Featured & Trending</div>
-    <div class="app-grid" id="featuredGrid">
-        <p style="padding:0 5%">Loading apps...</p>
-    </div>
+        <!-- Signup Form -->
+        <div id="signupForm" class="hidden">
+            <h3>Create Account</h3>
+            <input type="text" id="regName" placeholder="Full Name">
+            <input type="email" id="regEmail" placeholder="Email Address">
+            <input type="password" id="regPass" placeholder="Set Password">
+            <button class="btn btn-primary" onclick="emailSignup()" style="width:100%">Sign Up</button>
+            <p style="font-size:0.9rem;">Existing user? <a href="#" onclick="toggleAuthMode()" style="color:var(--primary);">Login</a></p>
+        </div>
 
-    <!-- Filters -->
-    <div class="categories" id="categoryFilters">
-        <button class="cat-btn active" onclick="filterCategory('All')">All</button>
-        <button class="cat-btn" onclick="filterCategory('Game')">Games</button>
-        <button class="cat-btn" onclick="filterCategory('Tool')">Tools</button>
-        <button class="cat-btn" onclick="filterCategory('Education')">Education</button>
-        <button class="cat-btn" onclick="filterCategory('AI')">AI</button>
-        <button class="cat-btn" onclick="filterCategory('Utility')">Utility</button>
+        <hr style="margin:20px 0; opacity:0.3;">
+        
+        <button class="btn btn-google" onclick="googleLogin()">
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="20">
+            Continue with Google
+        </button>
     </div>
+</div>
 
-    <!-- All Apps -->
-    <div class="section-title">All Apps</div>
-    <div class="app-grid" id="appGrid">
-        <!-- JS Populated -->
+<!-- MAIN APP INTERFACE (Hidden by default) -->
+<div id="mainInterface" class="hidden">
+    <!-- Header -->
+    <header>
+        <div class="logo">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zm0 9l2.5-1.25L12 8.5l-2.5 1.25L12 11zm0 2.5l-5-2.5-5 2.5L12 22l10-8.5-5-2.5-5 2.5z"/></svg>
+            AppPlus <span>Store</span>
+        </div>
+        <div class="search-bar">
+            <input type="text" id="searchInput" placeholder="Search by tags (e.g., Action, Tool, AI)..." onkeyup="handleSearch()">
+        </div>
+        <div style="display:flex; gap:10px; align-items:center;">
+            <button class="btn btn-secondary" onclick="toggleTheme()" id="themeBtn">🌙</button>
+            <button class="btn btn-primary" onclick="openUploadModal()">Submit App</button>
+            <img id="headerAvatar" src="https://via.placeholder.com/40" class="profile-avatar" onclick="openProfileModal()">
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main id="mainView">
+        <!-- Hero/Featured -->
+        <div class="section-title">Featured & Trending</div>
+        <div class="app-grid" id="featuredGrid">
+            <p style="padding:0 5%">Loading apps...</p>
+        </div>
+
+        <!-- Filters -->
+        <div class="categories" id="categoryFilters">
+            <button class="cat-btn active" onclick="filterCategory('All')">All</button>
+            <button class="cat-btn" onclick="filterCategory('Game')">Games</button>
+            <button class="cat-btn" onclick="filterCategory('Tool')">Tools</button>
+            <button class="cat-btn" onclick="filterCategory('Education')">Education</button>
+            <button class="cat-btn" onclick="filterCategory('AI')">AI</button>
+            <button class="cat-btn" onclick="filterCategory('Utility')">Utility</button>
+        </div>
+
+        <!-- All Apps -->
+        <div class="section-title">All Apps</div>
+        <div class="app-grid" id="appGrid">
+            <!-- JS Populated -->
+        </div>
+    </main>
+
+    <footer onclick="openAdminPrompt()">
+        <p>&copy; 2026 App Plus Game Store. Made for India.</p>
+        <p style="opacity:0.5; font-size:0.7rem;">Click footer for Admin</p>
+        <p style="margin-top:10px; color: var(--primary);">Donate via UPI: 6206319727@fam</p>
+    </footer>
+</div>
+
+<!-- Profile Modal (NEW) -->
+<div id="profileModal" class="modal hidden">
+    <div class="modal-content" style="text-align:center;">
+        <span class="close-modal" onclick="closeModal('profileModal')">&times;</span>
+        <img id="pAvatar" src="" style="width:100px; height:100px; border-radius:50%; border:3px solid var(--primary); margin-bottom:10px;">
+        <h2 id="pName">User Name</h2>
+        <p id="pEmail" style="color:gray; margin-bottom:20px;"></p>
+
+        <div class="flex" style="gap:10px; margin-bottom:20px;">
+            <div class="stat-box">
+                <h3 id="pUploads">0</h3>
+                <small>Uploads</small>
+            </div>
+            <div class="stat-box">
+                <h3 id="pEarnings">₹0</h3>
+                <small>Total Earnings</small>
+            </div>
+        </div>
+
+        <div class="form-group" style="text-align:left;">
+            <label>Your UPI ID (To receive payments)</label>
+            <div class="flex" style="gap:5px;">
+                <input type="text" id="userUpi" placeholder="e.g. name@okaxis">
+                <button class="btn btn-secondary" onclick="saveUserUpi()">Save</button>
+            </div>
+            <small style="color:var(--primary);">Compulsory for earning from Premium Apps</small>
+        </div>
+
+        <button class="btn btn-danger" onclick="logout()" style="width:100%; margin-top:10px;">Logout</button>
     </div>
-</main>
+</div>
 
 <!-- Upload Modal -->
 <div id="uploadModal" class="modal hidden">
@@ -260,6 +375,7 @@
                 <label>App Name *</label>
                 <input type="text" id="uName" required>
             </div>
+            <!-- Dev Name Auto-filled from Profile usually, but kept editable -->
             <div class="form-group">
                 <label>Developer Name *</label>
                 <input type="text" id="uDev" required>
@@ -329,32 +445,38 @@
     </div>
 </div>
 
-<!-- Payment Verification Modal -->
+<!-- Payment Verification Modal (Used for both Admin Fee & Buying Apps) -->
 <div id="paymentModal" class="modal hidden">
     <div class="modal-content" style="text-align:center;">
-        <h2 style="color:var(--primary);">Payment Required</h2>
+        <h2 style="color:var(--primary);" id="payTitle">Payment Required</h2>
         
+        <p id="payReceiverInfo" style="margin-bottom:10px;">Payment goes to Admin/Developer</p>
+
         <a id="upiPayBtn" href="#" class="btn btn-primary upi-direct-btn">
             Pay Now via UPI App
         </a>
 
         <div class="payment-alert">
-            WARNING: After payment, you MUST enter the EXACT Name & UPI ID shown in your payment history. If details do not match, your app will be REJECTED permanently.
+            WARNING: After payment, you MUST enter the EXACT Name & UPI ID shown in your payment history. If details do not match, verification will fail.
         </div>
 
-        <form onsubmit="finalizeSubmission(event)">
+        <form onsubmit="finalizeTransaction(event)">
             <h4 style="text-align:left; margin-bottom:10px;">Confirm Transaction Details</h4>
             <div class="form-group">
-                <label>Sender Name (Exact as in Bank) *</label>
+                <label>Sender Name (Your Bank Name) *</label>
                 <input type="text" id="paySenderName" placeholder="e.g. Rahul Kumar" required>
             </div>
             <div class="form-group">
                 <label>Sender UPI ID *</label>
                 <input type="text" id="paySenderUpi" placeholder="e.g. rahul@oksbi" required>
             </div>
+            <!-- Hidden inputs to track context -->
+            <input type="hidden" id="payContext" value=""> <!-- 'upload' or 'purchase' -->
+            <input type="hidden" id="payTargetId" value=""> <!-- App ID if purchase -->
+
             <div class="flex" style="gap:10px;">
                 <button type="button" class="btn btn-secondary" style="flex:1;" onclick="closeModal('paymentModal')">Cancel</button>
-                <button type="submit" class="btn btn-success" style="flex:1;">Submit for Review</button>
+                <button type="submit" class="btn btn-success" style="flex:1;">Submit Verification</button>
             </div>
         </form>
     </div>
@@ -397,16 +519,9 @@
     </div>
 </div>
 
-<footer onclick="openAdminPrompt()">
-    <p>&copy; 2026 App Plus Game Store. Made for India.</p>
-    <p style="opacity:0.5; font-size:0.7rem;">Click footer for Admin</p>
-    <p style="margin-top:10px; color: var(--primary);">Donate via UPI: 6206319727@fam</p>
-</footer>
-
 <script>
 // ==========================================
 // 🔴 IMPORTANT: FIREBASE CONFIGURATION 🔴
-// Niche di gayi jagah mein apni asli keys dalein
 // ==========================================
 const firebaseConfig = {
   apiKey: "AIzaSyDpF0VyF-4MeniRCO1L1oMhYtR5uBZkklU",
@@ -422,28 +537,118 @@ const firebaseConfig = {
 try {
     firebase.initializeApp(firebaseConfig);
 } catch (e) {
-    console.error("Firebase Init Error: Keys might be missing");
+    console.error("Firebase Init Error");
 }
 
+const auth = firebase.auth();
 const db = firebase.firestore();
 const storage = firebase.storage();
 
 // --- State Management ---
 const ADMIN_PASS = "ss620631";
-const RECEIVER_UPI = "6206319727@fam"; 
+const ADMIN_UPI = "6206319727@fam"; 
 let apps = []; 
+let currentUser = null;
 let currentCategory = 'All';
 let tempAppData = {}; 
 
-// --- Core Logic ---
+// =======================================================
+// 1. AUTHENTICATION & PROFILE LOGIC
+// =======================================================
+auth.onAuthStateChanged(async (user) => {
+    if (user) {
+        currentUser = user;
+        document.getElementById('authScreen').classList.add('hidden');
+        document.getElementById('mainInterface').classList.remove('hidden');
+        
+        // Header Avatar
+        document.getElementById('headerAvatar').src = user.photoURL || 'https://via.placeholder.com/40';
 
+        // Check if user exists in DB, if not create basic profile
+        const userRef = db.collection('users').doc(user.uid);
+        const doc = await userRef.get();
+        if (!doc.exists) {
+            await userRef.set({
+                name: user.displayName || user.email.split('@')[0],
+                email: user.email,
+                photo: user.photoURL,
+                upiId: '',
+                earnings: 0
+            });
+        }
+        
+        // Auto-fill developer name in upload
+        document.getElementById('uDev').value = user.displayName || user.email.split('@')[0];
+        document.getElementById('uEmail').value = user.email;
+
+        loadAppsFromDB();
+    } else {
+        currentUser = null;
+        document.getElementById('authScreen').classList.remove('hidden');
+        document.getElementById('mainInterface').classList.add('hidden');
+    }
+});
+
+const toggleAuthMode = () => {
+    document.getElementById('loginForm').classList.toggle('hidden');
+    document.getElementById('signupForm').classList.toggle('hidden');
+};
+
+const emailLogin = () => {
+    const email = document.getElementById('loginEmail').value;
+    const pass = document.getElementById('loginPass').value;
+    auth.signInWithEmailAndPassword(email, pass).catch(e => alert(e.message));
+};
+
+const emailSignup = () => {
+    const email = document.getElementById('regEmail').value;
+    const pass = document.getElementById('regPass').value;
+    const name = document.getElementById('regName').value;
+    auth.createUserWithEmailAndPassword(email, pass).then(cred => {
+        cred.user.updateProfile({ displayName: name });
+    }).catch(e => alert(e.message));
+};
+
+const googleLogin = () => {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    auth.signInWithPopup(provider).catch(e => alert(e.message));
+};
+
+const logout = () => auth.signOut();
+
+const openProfileModal = async () => {
+    if(!currentUser) return;
+    const userRef = await db.collection('users').doc(currentUser.uid).get();
+    const data = userRef.data();
+
+    // Calculate Uploads
+    const myApps = apps.filter(a => a.uploaderUid === currentUser.uid);
+
+    document.getElementById('pAvatar').src = currentUser.photoURL || 'https://via.placeholder.com/100';
+    document.getElementById('pName').innerText = data.name;
+    document.getElementById('pEmail').innerText = currentUser.email;
+    document.getElementById('userUpi').value = data.upiId || '';
+    document.getElementById('pUploads').innerText = myApps.length;
+    document.getElementById('pEarnings').innerText = `₹${data.earnings || 0}`;
+
+    document.getElementById('profileModal').classList.remove('hidden');
+};
+
+const saveUserUpi = async () => {
+    const upi = document.getElementById('userUpi').value;
+    if(!upi.includes('@')) return alert("Invalid UPI ID");
+    await db.collection('users').doc(currentUser.uid).update({ upiId: upi });
+    alert("UPI ID Saved Successfully!");
+};
+
+// =======================================================
+// 2. APP LOAD & DISPLAY LOGIC
+// =======================================================
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
-    loadAppsFromDB(); // Load from Cloud
 });
 
 const loadAppsFromDB = () => {
-    // Realtime listener for apps
     db.collection("apps").onSnapshot((querySnapshot) => {
         apps = [];
         querySnapshot.forEach((doc) => {
@@ -454,7 +659,6 @@ const loadAppsFromDB = () => {
         renderHome();
     }, (error) => {
         console.error("Error loading apps:", error);
-        document.getElementById('featuredGrid').innerHTML = '<p style="padding:0 5%; color:red;">Error connecting to server. Check Config.</p>';
     });
 };
 
@@ -519,6 +723,9 @@ const uploadFileToStorage = async (file, path) => {
     return await ref.getDownloadURL();
 };
 
+// =======================================================
+// 3. UPLOAD LOGIC (Pays Admin)
+// =======================================================
 const handleUploadStep1 = async (e) => {
     e.preventDefault();
     const btn = document.getElementById('uploadBtn');
@@ -542,7 +749,6 @@ const handleUploadStep1 = async (e) => {
     const ssInputs = document.querySelectorAll('.ss-input');
 
     try {
-        // Upload to Firebase Storage
         const ts = Date.now();
         const logoUrl = await uploadFileToStorage(logoFile, `logos/${ts}_${logoFile.name}`);
         const apkUrl = await uploadFileToStorage(apkFile, `apks/${ts}_${apkFile.name}`);
@@ -559,7 +765,7 @@ const handleUploadStep1 = async (e) => {
             name, developer: dev, email, category: cat, version: ver, description: desc, tags,
             logo: logoUrl,
             screenshots,
-            apkUrl: apkUrl, // Saving URL instead of Base64
+            apkUrl: apkUrl,
             fileSize: apkFile.size,
             isPremium: isPremium,
             appPrice: appPrice,
@@ -568,20 +774,28 @@ const handleUploadStep1 = async (e) => {
             status: 'pending', 
             featured: false,
             ratings: [],
+            uploaderUid: currentUser.uid, // Track who uploaded
             date: new Date().toISOString()
         };
 
-        const upiLink = `upi://pay?pa=${RECEIVER_UPI}&pn=AppPlusStore&am=${listingFee}&cu=INR&tn=AppListingFee`;
+        // SETUP PAYMENT FOR ADMIN (Upload Fee)
+        const upiLink = `upi://pay?pa=${ADMIN_UPI}&pn=AppPlusAdmin&am=${listingFee}&cu=INR&tn=AppListingFee`;
         
         const payBtn = document.getElementById('upiPayBtn');
         payBtn.href = upiLink;
-        payBtn.innerText = `Pay ₹${listingFee} Now`;
+        payBtn.innerText = `Pay ₹${listingFee} to Admin`;
+        
+        document.getElementById('payTitle').innerText = "Pay Listing Fee";
+        document.getElementById('payReceiverInfo').innerText = "Fee goes to Admin";
+        
+        // Set Context
+        document.getElementById('payContext').value = 'upload';
 
         closeModal('uploadModal');
         document.getElementById('paymentModal').classList.remove('hidden');
 
     } catch (err) {
-        alert('Error uploading files. Check internet or Firebase config.');
+        alert('Error uploading files.');
         console.error(err);
     } finally {
         btn.innerText = "Proceed to Payment";
@@ -589,30 +803,59 @@ const handleUploadStep1 = async (e) => {
     }
 };
 
-const finalizeSubmission = async (e) => {
+// =======================================================
+// 4. TRANSACTION HANDLER (Upload & Purchase)
+// =======================================================
+const finalizeTransaction = async (e) => {
     e.preventDefault();
     
+    const context = document.getElementById('payContext').value;
     const senderName = document.getElementById('paySenderName').value;
     const senderUpi = document.getElementById('paySenderUpi').value;
 
     if(!senderName || !senderUpi) return alert("Please fill payment details");
 
-    tempAppData.paymentDetails = {
-        senderName: senderName,
-        senderUpi: senderUpi,
-        amountPaid: tempAppData.listingFee
-    };
+    if (context === 'upload') {
+        // FINALIZE UPLOAD
+        tempAppData.paymentDetails = {
+            senderName: senderName,
+            senderUpi: senderUpi,
+            amountPaid: tempAppData.listingFee,
+            type: 'listing_fee'
+        };
 
-    try {
-        await db.collection("apps").add(tempAppData);
-        alert('Submission Successful! App sent to Server.');
-    } catch(err) {
-        alert("Error saving to database: " + err.message);
+        try {
+            await db.collection("apps").add(tempAppData);
+            alert('App Submitted for Review!');
+        } catch(err) {
+            alert("Error: " + err.message);
+        }
+        document.getElementById('uploadForm').reset();
+        tempAppData = {};
+
+    } else if (context === 'purchase') {
+        // FINALIZE PURCHASE
+        const appId = document.getElementById('payTargetId').value;
+        const app = apps.find(a => a.id === appId);
+        
+        // 1. Record Transaction (Optional: You could have a transactions collection)
+        
+        // 2. Add Earnings to Developer
+        try {
+            await db.collection('users').doc(app.uploaderUid).update({
+                earnings: firebase.firestore.FieldValue.increment(parseInt(app.appPrice))
+            });
+
+            // 3. Start Download
+            startDownloadProcess(appId);
+            alert("Payment Verified! Download Starting...");
+        } catch(err) {
+            console.error(err);
+            alert("Error processing purchase. Contact Admin.");
+        }
     }
 
     closeModal('paymentModal');
-    document.getElementById('uploadForm').reset();
-    tempAppData = {}; 
 };
 
 const renderHome = () => {
@@ -627,7 +870,6 @@ const renderHome = () => {
     const featured = approvedApps.filter(a => a.featured);
 
     const displaySet = new Set([...trending, ...featured]);
-    // Use Array.from because Set iteration can be tricky with complex objects in some polyfills
     Array.from(displaySet).forEach(app => {
         featGrid.appendChild(createAppCard(app, true));
     });
@@ -696,9 +938,17 @@ const openDetail = (id) => {
     const ratingList = app.ratings || [];
     const avgRating = ratingList.length ? (ratingList.reduce((a,b)=>a+b.stars,0)/ratingList.length).toFixed(1) : '0.0';
 
-    const actionButton = app.isPremium 
-        ? `<button class="btn btn-primary download-btn" onclick="downloadApp('${app.id}')">Buy for ₹${app.appPrice}</button>`
-        : `<button class="btn btn-primary download-btn" id="dlBtn" onclick="downloadApp('${app.id}')">Download Now (${formatSize(app.fileSize)})</button>`;
+    // Different Button for Premium vs Free
+    const isOwner = currentUser && currentUser.uid === app.uploaderUid;
+    let actionButton = '';
+
+    if (isOwner) {
+        actionButton = `<button class="btn btn-secondary download-btn">You Own This App</button>`;
+    } else if (app.isPremium) {
+        actionButton = `<button class="btn btn-primary download-btn" onclick="initiatePurchase('${app.id}')">Buy for ₹${app.appPrice}</button>`;
+    } else {
+        actionButton = `<button class="btn btn-primary download-btn" id="dlBtn" onclick="startDownloadProcess('${app.id}')">Download Now (${formatSize(app.fileSize)})</button>`;
+    }
 
     const screenshotsHtml = app.screenshots ? app.screenshots.map(s => `<img src="${s}" class="screenshot-preview">`).join('') : '';
     const reviewsHtml = ratingList.map(r => `
@@ -756,31 +1006,64 @@ const openDetail = (id) => {
     modal.classList.remove('hidden');
 };
 
-const downloadApp = (id) => {
-    const app = apps.find(a => a.id === id);
+// =======================================================
+// 5. PURCHASE LOGIC (Pays Developer)
+// =======================================================
+const initiatePurchase = async (appId) => {
+    const app = apps.find(a => a.id === appId);
     
-    if (app.isPremium) {
-        alert(`To download this premium app, you must pay ₹${app.appPrice}.`);
+    // Get Developer UPI
+    const devDoc = await db.collection('users').doc(app.uploaderUid).get();
+    const devData = devDoc.data();
+    const devUPI = devData.upiId;
+
+    if (!devUPI) {
+        alert("Developer has not set up a UPI ID yet. Cannot purchase now.");
         return;
     }
 
+    // Prepare Payment Modal for Developer
+    const upiLink = `upi://pay?pa=${devUPI}&pn=${devData.name}&am=${app.appPrice}&cu=INR&tn=BuyApp-${app.name}`;
+    
+    const payBtn = document.getElementById('upiPayBtn');
+    payBtn.href = upiLink;
+    payBtn.innerText = `Pay ₹${app.appPrice} to Developer`;
+    
+    document.getElementById('payTitle').innerText = `Buy ${app.name}`;
+    document.getElementById('payReceiverInfo').innerText = `Payment goes to: ${devData.name}`;
+    
+    // Set Context
+    document.getElementById('payContext').value = 'purchase';
+    document.getElementById('payTargetId').value = appId;
+
+    closeModal('detailModal');
+    document.getElementById('paymentModal').classList.remove('hidden');
+};
+
+
+// =======================================================
+// 6. DOWNLOAD EXECUTION
+// =======================================================
+const startDownloadProcess = (id) => {
+    const app = apps.find(a => a.id === id);
     const btn = document.getElementById('dlBtn');
+    
     if(btn) {
         btn.innerHTML = "Downloading...";
         btn.classList.add('download-anim');
     }
 
     setTimeout(async () => {
-        // Increment download count in Firestore
+        // Increment download count
         const appRef = db.collection("apps").doc(id);
         appRef.update({
             downloads: firebase.firestore.FieldValue.increment(1)
         });
 
-        // Trigger Download from Firebase Storage URL
+        // Trigger Download
         const a = document.createElement('a');
         a.href = app.apkUrl;
-        a.target = "_blank"; // Open in new tab/start download
+        a.target = "_blank"; 
         a.download = app.name + ".apk";
         document.body.appendChild(a);
         a.click();
@@ -806,13 +1089,13 @@ const submitReview = async (id) => {
             ratings: firebase.firestore.FieldValue.arrayUnion(newRating)
         });
         alert("Review Submitted");
-        openDetail(id); // Reload modal to see new review
+        openDetail(id); // Reload modal
     } catch(err) {
         console.error("Review Error", err);
     }
 };
 
-// 4. Admin System
+// 7. Admin System (Unchanged)
 const openAdminPrompt = () => {
     document.getElementById('adminLoginModal').classList.remove('hidden');
 };
@@ -925,4 +1208,4 @@ const deleteApp = async (id) => {
 };
 </script>
 </body>
-    </html>
+</html>
