@@ -592,7 +592,10 @@ auth.onAuthStateChanged(async (user) => {
         document.getElementById('authScreen').classList.add('hidden');
         document.getElementById('mainInterface').classList.remove('hidden');
         
-        document.getElementById('headerAvatar').src = user.photoURL || 'https://via.placeholder.com/40';
+        // Update header avatar safely
+        if(document.getElementById('headerAvatar')) {
+            document.getElementById('headerAvatar').src = user.photoURL || 'https://via.placeholder.com/40';
+        }
 
         const userRef = db.collection('users').doc(user.uid);
         const doc = await userRef.get();
@@ -606,8 +609,9 @@ auth.onAuthStateChanged(async (user) => {
             });
         }
         
-        document.getElementById('uDev').value = user.displayName || user.email.split('@')[0];
-        document.getElementById('uEmail').value = user.email;
+        // Pre-fill upload form if elements exist
+        if(document.getElementById('uDev')) document.getElementById('uDev').value = user.displayName || user.email.split('@')[0];
+        if(document.getElementById('uEmail')) document.getElementById('uEmail').value = user.email;
 
         loadAppsFromDB();
     } else {
@@ -650,21 +654,37 @@ const logout = () => {
     }).catch(e => alert(e.message));
 };
 
+// FIXED PROFILE MODAL
 const openProfileModal = async () => {
-    if(!currentUser) return;
-    const userRef = await db.collection('users').doc(currentUser.uid).get();
-    const data = userRef.data();
+    if(!currentUser) {
+        alert("Please login first.");
+        return;
+    }
 
-    const myApps = apps.filter(a => a.uploaderUid === currentUser.uid);
+    // Show visual feedback immediately so user knows it's working
+    document.body.style.cursor = 'wait';
+    alert("Loading profile data..."); 
 
-    document.getElementById('pAvatar').src = currentUser.photoURL || 'https://via.placeholder.com/100';
-    document.getElementById('pName').innerText = data.name;
-    document.getElementById('pEmail').innerText = currentUser.email;
-    document.getElementById('userUpi').value = data.upiId || '';
-    document.getElementById('pUploads').innerText = myApps.length;
-    document.getElementById('pEarnings').innerText = `₹${data.earnings || 0}`;
+    try {
+        const userRef = await db.collection('users').doc(currentUser.uid).get();
+        const data = userRef.data();
 
-    document.getElementById('profileModal').classList.remove('hidden');
+        const myApps = apps.filter(a => a.uploaderUid === currentUser.uid);
+
+        document.getElementById('pAvatar').src = currentUser.photoURL || 'https://via.placeholder.com/100';
+        document.getElementById('pName').innerText = data.name || 'User';
+        document.getElementById('pEmail').innerText = currentUser.email;
+        document.getElementById('userUpi').value = data.upiId || '';
+        document.getElementById('pUploads').innerText = myApps.length;
+        document.getElementById('pEarnings').innerText = `₹${data.earnings || 0}`;
+
+        document.getElementById('profileModal').classList.remove('hidden');
+    } catch(err) {
+        console.error("Profile Error:", err);
+        alert("Could not load profile. Check internet connection.");
+    } finally {
+        document.body.style.cursor = 'default';
+    }
 };
 
 const saveUserUpi = async () => {
@@ -784,7 +804,7 @@ const handleUploadStep1 = async (e) => {
     const btn = document.getElementById('uploadBtn');
     
     // UI Setup
-    btn.innerText = "Processing...";
+    btn.innerText = "Processing (Do not close)...";
     btn.disabled = true;
     const progressContainer = document.getElementById('uploadProgressContainer');
     const progressBar = document.getElementById('uploadProgressBar');
@@ -809,10 +829,12 @@ const handleUploadStep1 = async (e) => {
     
     // Calculate Total Size for Progress
     let totalBytesExpected = logoFile.size + apkFile.size;
-    const ssFiles = [];
+    
+    // Fix for "Add More" click but no file selected
+    const validSsFiles = [];
     ssInputs.forEach(input => {
-        if(input.files[0]) {
-            ssFiles.push(input.files[0]);
+        if(input.files && input.files[0]) {
+            validSsFiles.push(input.files[0]);
             totalBytesExpected += input.files[0].size;
         }
     });
@@ -821,7 +843,7 @@ const handleUploadStep1 = async (e) => {
     let progressMap = {};
     progressMap[logoFile.name] = 0;
     progressMap[apkFile.name] = 0;
-    ssFiles.forEach(f => progressMap[f.name] = 0);
+    validSsFiles.forEach(f => progressMap[f.name] = 0);
 
     const updateGlobalProgress = (fileName, bytesTransferred) => {
         progressMap[fileName] = bytesTransferred;
@@ -841,13 +863,14 @@ const handleUploadStep1 = async (e) => {
         const ts = Date.now();
         
         // 1. Prepare Promises with Progress Callbacks
+        // We start ALL uploads at the exact same time (Parallel)
         const logoPromise = uploadFileWithProgress(logoFile, `logos/${ts}_${logoFile.name}`, updateGlobalProgress);
         const apkPromise = uploadFileWithProgress(apkFile, `apks/${ts}_${apkFile.name}`, updateGlobalProgress);
-        const ssPromises = ssFiles.map(file => 
+        const ssPromises = validSsFiles.map(file => 
             uploadFileWithProgress(file, `screens/${ts}_${file.name}`, updateGlobalProgress)
         );
 
-        // 2. Execute Parallel Uploads
+        // 2. Execute Parallel Uploads and Wait for All
         const [logoUrl, apkUrl] = await Promise.all([logoPromise, apkPromise]);
         const screenshots = await Promise.all(ssPromises);
 
@@ -1264,4 +1287,4 @@ const deleteApp = async (id) => {
 };
 </script>
 </body>
-    </html>
+                            </html>
