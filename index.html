@@ -8,7 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-storage-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script> <!-- Auth Added -->
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
 
 <style>
     :root {
@@ -195,6 +195,27 @@
     @keyframes slideUp { from { transform: translateY(50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
     .close-modal { position: absolute; top: 15px; right: 20px; font-size: 24px; cursor: pointer; }
 
+    /* PROGRESS BAR STYLES (NEW) */
+    .progress-container {
+        width: 100%;
+        background-color: #e0e0e0;
+        border-radius: 10px;
+        margin-top: 15px;
+        height: 20px;
+        overflow: hidden;
+    }
+    .progress-bar {
+        width: 0%;
+        height: 100%;
+        background: linear-gradient(90deg, var(--primary), var(--secondary));
+        transition: width 0.2s ease;
+        text-align: center;
+        line-height: 20px;
+        color: white;
+        font-size: 12px;
+        font-weight: bold;
+    }
+
     /* Forms */
     .form-group { margin-bottom: 15px; }
     .form-group label { display: block; margin-bottom: 5px; font-weight: 600; }
@@ -333,7 +354,7 @@
     </footer>
 </div>
 
-<!-- Profile Modal (NEW) -->
+<!-- Profile Modal -->
 <div id="profileModal" class="modal hidden">
     <div class="modal-content" style="text-align:center;">
         <span class="close-modal" onclick="closeModal('profileModal')">&times;</span>
@@ -361,14 +382,14 @@
             <small style="color:var(--primary);">Compulsory for earning from Premium Apps</small>
         </div>
 
-        <!-- LOGOUT BUTTON (Already present, reinforced functionality) -->
+        <!-- LOGOUT BUTTON -->
         <button class="btn btn-danger" onclick="logout()" style="width:100%; margin-top:20px; font-weight:bold;">
             🚪 Logout
         </button>
     </div>
 </div>
 
-<!-- Upload Modal -->
+<!-- Upload Modal with Progress Bar -->
 <div id="uploadModal" class="modal hidden">
     <div class="modal-content">
         <span class="close-modal" onclick="closeModal('uploadModal')">&times;</span>
@@ -378,7 +399,6 @@
                 <label>App Name *</label>
                 <input type="text" id="uName" required>
             </div>
-            <!-- Dev Name Auto-filled from Profile usually, but kept editable -->
             <div class="form-group">
                 <label>Developer Name *</label>
                 <input type="text" id="uDev" required>
@@ -443,12 +463,21 @@
                 <label>APK File *</label>
                 <input type="file" id="uApk" required>
             </div>
+            
+            <!-- PROGRESS BAR UI -->
+            <div id="uploadProgressContainer" class="hidden" style="margin-bottom:15px;">
+                <div class="progress-container">
+                    <div id="uploadProgressBar" class="progress-bar">0%</div>
+                </div>
+                <p id="uploadProgressText" style="text-align:center; margin-top:5px; font-size:0.9rem;">Starting Upload...</p>
+            </div>
+
             <button type="submit" class="btn btn-primary" id="uploadBtn" style="width:100%;">Proceed to Payment</button>
         </form>
     </div>
 </div>
 
-<!-- Payment Verification Modal (Used for both Admin Fee & Buying Apps) -->
+<!-- Payment Verification Modal -->
 <div id="paymentModal" class="modal hidden">
     <div class="modal-content" style="text-align:center;">
         <h2 style="color:var(--primary);" id="payTitle">Payment Required</h2>
@@ -473,9 +502,8 @@
                 <label>Sender UPI ID *</label>
                 <input type="text" id="paySenderUpi" placeholder="e.g. rahul@oksbi" required>
             </div>
-            <!-- Hidden inputs to track context -->
-            <input type="hidden" id="payContext" value=""> <!-- 'upload' or 'purchase' -->
-            <input type="hidden" id="payTargetId" value=""> <!-- App ID if purchase -->
+            <input type="hidden" id="payContext" value=""> 
+            <input type="hidden" id="payTargetId" value=""> 
 
             <div class="flex" style="gap:10px;">
                 <button type="button" class="btn btn-secondary" style="flex:1;" onclick="closeModal('paymentModal')">Cancel</button>
@@ -564,10 +592,8 @@ auth.onAuthStateChanged(async (user) => {
         document.getElementById('authScreen').classList.add('hidden');
         document.getElementById('mainInterface').classList.remove('hidden');
         
-        // Header Avatar
         document.getElementById('headerAvatar').src = user.photoURL || 'https://via.placeholder.com/40';
 
-        // Check if user exists in DB, if not create basic profile
         const userRef = db.collection('users').doc(user.uid);
         const doc = await userRef.get();
         if (!doc.exists) {
@@ -580,7 +606,6 @@ auth.onAuthStateChanged(async (user) => {
             });
         }
         
-        // Auto-fill developer name in upload
         document.getElementById('uDev').value = user.displayName || user.email.split('@')[0];
         document.getElementById('uEmail').value = user.email;
 
@@ -617,13 +642,10 @@ const googleLogin = () => {
     auth.signInWithPopup(provider).catch(e => alert(e.message));
 };
 
-// LOGOUT FUNCTION (Linked to Profile Modal)
+// LOGOUT FUNCTION
 const logout = () => {
-    // Close modal first
     closeModal('profileModal');
-    // Sign out from Firebase
     auth.signOut().then(() => {
-        // UI updates automatically via onAuthStateChanged
         alert("Logged out successfully");
     }).catch(e => alert(e.message));
 };
@@ -633,7 +655,6 @@ const openProfileModal = async () => {
     const userRef = await db.collection('users').doc(currentUser.uid).get();
     const data = userRef.data();
 
-    // Calculate Uploads
     const myApps = apps.filter(a => a.uploaderUid === currentUser.uid);
 
     document.getElementById('pAvatar').src = currentUser.photoURL || 'https://via.placeholder.com/100';
@@ -701,6 +722,11 @@ const formatSize = (bytes) => {
 };
 
 const openUploadModal = () => {
+    // Reset form and progress
+    document.getElementById('uploadForm').reset();
+    document.getElementById('uploadProgressContainer').classList.add('hidden');
+    document.getElementById('uploadProgressBar').style.width = '0%';
+    document.getElementById('uploadProgressBar').innerText = '0%';
     document.getElementById('uploadModal').classList.remove('hidden');
 };
 
@@ -729,20 +755,41 @@ const togglePremiumInput = () => {
     }
 };
 
-const uploadFileToStorage = async (file, path) => {
-    const ref = storage.ref(path);
-    await ref.put(file);
-    return await ref.getDownloadURL();
+// =======================================================
+// 3. OPTIMIZED UPLOAD LOGIC WITH VISUAL PROGRESS BAR
+// =======================================================
+
+// Helper to handle individual file uploads with progress monitoring
+const uploadFileWithProgress = (file, path, onProgress) => {
+    return new Promise((resolve, reject) => {
+        const ref = storage.ref(path);
+        const task = ref.put(file);
+
+        task.on('state_changed', 
+            (snapshot) => {
+                const transferred = snapshot.bytesTransferred;
+                onProgress(file.name, transferred); // Report back to main tracker
+            },
+            (error) => reject(error),
+            async () => {
+                const url = await task.snapshot.ref.getDownloadURL();
+                resolve(url);
+            }
+        );
+    });
 };
 
-// =======================================================
-// 3. OPTIMIZED UPLOAD LOGIC (FIXED SLOW SPEED)
-// =======================================================
 const handleUploadStep1 = async (e) => {
     e.preventDefault();
     const btn = document.getElementById('uploadBtn');
-    btn.innerText = "🚀 Uploading Files (Parallel)... Please Wait";
+    
+    // UI Setup
+    btn.innerText = "Processing...";
     btn.disabled = true;
+    const progressContainer = document.getElementById('uploadProgressContainer');
+    const progressBar = document.getElementById('uploadProgressBar');
+    const progressText = document.getElementById('uploadProgressText');
+    progressContainer.classList.remove('hidden');
 
     const name = document.getElementById('uName').value;
     const dev = document.getElementById('uDev').value;
@@ -759,33 +806,54 @@ const handleUploadStep1 = async (e) => {
     const logoFile = document.getElementById('uLogo').files[0];
     const apkFile = document.getElementById('uApk').files[0];
     const ssInputs = document.querySelectorAll('.ss-input');
+    
+    // Calculate Total Size for Progress
+    let totalBytesExpected = logoFile.size + apkFile.size;
+    const ssFiles = [];
+    ssInputs.forEach(input => {
+        if(input.files[0]) {
+            ssFiles.push(input.files[0]);
+            totalBytesExpected += input.files[0].size;
+        }
+    });
+
+    // Tracking variables
+    let progressMap = {};
+    progressMap[logoFile.name] = 0;
+    progressMap[apkFile.name] = 0;
+    ssFiles.forEach(f => progressMap[f.name] = 0);
+
+    const updateGlobalProgress = (fileName, bytesTransferred) => {
+        progressMap[fileName] = bytesTransferred;
+        
+        let totalTransferred = 0;
+        for (let key in progressMap) {
+            totalTransferred += progressMap[key];
+        }
+
+        const percentage = Math.min(100, Math.round((totalTransferred / totalBytesExpected) * 100));
+        progressBar.style.width = percentage + '%';
+        progressBar.innerText = percentage + '%';
+        progressText.innerText = `Uploading: ${percentage}% (${formatSize(totalTransferred)} / ${formatSize(totalBytesExpected)})`;
+    };
 
     try {
         const ts = Date.now();
         
-        // --- PARALLEL UPLOAD FIX START ---
-        // Instead of awaiting one by one, we create all promises and await them together.
-        
-        // 1. Prepare Logo Upload
-        const logoPromise = uploadFileToStorage(logoFile, `logos/${ts}_${logoFile.name}`);
-        
-        // 2. Prepare APK Upload
-        const apkPromise = uploadFileToStorage(apkFile, `apks/${ts}_${apkFile.name}`);
-
-        // 3. Prepare Screenshot Uploads
-        const ssFiles = [];
-        ssInputs.forEach(input => {
-            if(input.files[0]) ssFiles.push(input.files[0]);
-        });
-        
+        // 1. Prepare Promises with Progress Callbacks
+        const logoPromise = uploadFileWithProgress(logoFile, `logos/${ts}_${logoFile.name}`, updateGlobalProgress);
+        const apkPromise = uploadFileWithProgress(apkFile, `apks/${ts}_${apkFile.name}`, updateGlobalProgress);
         const ssPromises = ssFiles.map(file => 
-            uploadFileToStorage(file, `screens/${ts}_${file.name}`)
+            uploadFileWithProgress(file, `screens/${ts}_${file.name}`, updateGlobalProgress)
         );
 
-        // 4. Execute All in Parallel
+        // 2. Execute Parallel Uploads
         const [logoUrl, apkUrl] = await Promise.all([logoPromise, apkPromise]);
         const screenshots = await Promise.all(ssPromises);
-        // --- PARALLEL UPLOAD FIX END ---
+
+        // Upload Complete
+        progressBar.style.background = '#2ed573'; // Turn green
+        progressText.innerText = "Upload Complete! Preparing Payment...";
 
         tempAppData = {
             name, developer: dev, email, category: cat, version: ver, description: desc, tags,
@@ -800,11 +868,11 @@ const handleUploadStep1 = async (e) => {
             status: 'pending', 
             featured: false,
             ratings: [],
-            uploaderUid: currentUser.uid, // Track who uploaded
+            uploaderUid: currentUser.uid, 
             date: new Date().toISOString()
         };
 
-        // SETUP PAYMENT FOR ADMIN (Upload Fee)
+        // SETUP PAYMENT
         const upiLink = `upi://pay?pa=${ADMIN_UPI}&pn=AppPlusAdmin&am=${listingFee}&cu=INR&tn=AppListingFee`;
         
         const payBtn = document.getElementById('upiPayBtn');
@@ -814,15 +882,18 @@ const handleUploadStep1 = async (e) => {
         document.getElementById('payTitle').innerText = "Pay Listing Fee";
         document.getElementById('payReceiverInfo').innerText = "Fee goes to Admin";
         
-        // Set Context
         document.getElementById('payContext').value = 'upload';
 
-        closeModal('uploadModal');
-        document.getElementById('paymentModal').classList.remove('hidden');
+        setTimeout(() => {
+            closeModal('uploadModal');
+            document.getElementById('paymentModal').classList.remove('hidden');
+        }, 1000); // Small delay to show 100%
 
     } catch (err) {
         alert('Error uploading files. Check internet connection.');
         console.error(err);
+        progressBar.style.background = 'red';
+        progressText.innerText = "Upload Failed.";
     } finally {
         btn.innerText = "Proceed to Payment";
         btn.disabled = false;
@@ -830,7 +901,7 @@ const handleUploadStep1 = async (e) => {
 };
 
 // =======================================================
-// 4. TRANSACTION HANDLER (Upload & Purchase)
+// 4. TRANSACTION HANDLER
 // =======================================================
 const finalizeTransaction = async (e) => {
     e.preventDefault();
@@ -842,7 +913,6 @@ const finalizeTransaction = async (e) => {
     if(!senderName || !senderUpi) return alert("Please fill payment details");
 
     if (context === 'upload') {
-        // FINALIZE UPLOAD
         tempAppData.paymentDetails = {
             senderName: senderName,
             senderUpi: senderUpi,
@@ -860,19 +930,13 @@ const finalizeTransaction = async (e) => {
         tempAppData = {};
 
     } else if (context === 'purchase') {
-        // FINALIZE PURCHASE
         const appId = document.getElementById('payTargetId').value;
         const app = apps.find(a => a.id === appId);
         
-        // 1. Record Transaction (Optional: You could have a transactions collection)
-        
-        // 2. Add Earnings to Developer
         try {
             await db.collection('users').doc(app.uploaderUid).update({
                 earnings: firebase.firestore.FieldValue.increment(parseInt(app.appPrice))
             });
-
-            // 3. Start Download
             startDownloadProcess(appId);
             alert("Payment Verified! Download Starting...");
         } catch(err) {
@@ -964,7 +1028,6 @@ const openDetail = (id) => {
     const ratingList = app.ratings || [];
     const avgRating = ratingList.length ? (ratingList.reduce((a,b)=>a+b.stars,0)/ratingList.length).toFixed(1) : '0.0';
 
-    // Different Button for Premium vs Free
     const isOwner = currentUser && currentUser.uid === app.uploaderUid;
     let actionButton = '';
 
@@ -1032,13 +1095,8 @@ const openDetail = (id) => {
     modal.classList.remove('hidden');
 };
 
-// =======================================================
-// 5. PURCHASE LOGIC (Pays Developer)
-// =======================================================
 const initiatePurchase = async (appId) => {
     const app = apps.find(a => a.id === appId);
-    
-    // Get Developer UPI
     const devDoc = await db.collection('users').doc(app.uploaderUid).get();
     const devData = devDoc.data();
     const devUPI = devData.upiId;
@@ -1048,17 +1106,12 @@ const initiatePurchase = async (appId) => {
         return;
     }
 
-    // Prepare Payment Modal for Developer
     const upiLink = `upi://pay?pa=${devUPI}&pn=${devData.name}&am=${app.appPrice}&cu=INR&tn=BuyApp-${app.name}`;
-    
     const payBtn = document.getElementById('upiPayBtn');
     payBtn.href = upiLink;
     payBtn.innerText = `Pay ₹${app.appPrice} to Developer`;
-    
     document.getElementById('payTitle').innerText = `Buy ${app.name}`;
     document.getElementById('payReceiverInfo').innerText = `Payment goes to: ${devData.name}`;
-    
-    // Set Context
     document.getElementById('payContext').value = 'purchase';
     document.getElementById('payTargetId').value = appId;
 
@@ -1066,10 +1119,6 @@ const initiatePurchase = async (appId) => {
     document.getElementById('paymentModal').classList.remove('hidden');
 };
 
-
-// =======================================================
-// 6. DOWNLOAD EXECUTION
-// =======================================================
 const startDownloadProcess = (id) => {
     const app = apps.find(a => a.id === id);
     const btn = document.getElementById('dlBtn');
@@ -1080,13 +1129,11 @@ const startDownloadProcess = (id) => {
     }
 
     setTimeout(async () => {
-        // Increment download count
         const appRef = db.collection("apps").doc(id);
         appRef.update({
             downloads: firebase.firestore.FieldValue.increment(1)
         });
 
-        // Trigger Download
         const a = document.createElement('a');
         a.href = app.apkUrl;
         a.target = "_blank"; 
@@ -1115,13 +1162,12 @@ const submitReview = async (id) => {
             ratings: firebase.firestore.FieldValue.arrayUnion(newRating)
         });
         alert("Review Submitted");
-        openDetail(id); // Reload modal
+        openDetail(id);
     } catch(err) {
         console.error("Review Error", err);
     }
 };
 
-// 7. Admin System (Unchanged)
 const openAdminPrompt = () => {
     document.getElementById('adminLoginModal').classList.remove('hidden');
 };
@@ -1154,24 +1200,16 @@ const showAdminTab = (tab) => {
         if(pending.length === 0) content += '<p>No pending apps.</p>';
         else {
             content += `<table class="admin-table">
-                <tr>
-                    <th>App</th>
-                    <th>Payment Details</th>
-                    <th>Action</th>
-                </tr>
+                <tr><th>App</th><th>Payment Details</th><th>Action</th></tr>
                 ${pending.map(a => `
                     <tr>
-                        <td>
-                            <b>${a.name}</b><br>
-                            Type: ${a.isPremium ? `<span style="color:red">Premium (₹100)</span>` : `<span style="color:green">Free (₹10)</span>`}
-                        </td>
-                        <td style="background:rgba(0,0,0,0.05); font-size:0.85rem;">
+                        <td><b>${a.name}</b><br>${a.isPremium ? 'Premium' : 'Free'}</td>
+                        <td style="font-size:0.85rem;">
                             Name: <b>${a.paymentDetails ? a.paymentDetails.senderName : 'N/A'}</b><br>
-                            UPI: <b>${a.paymentDetails ? a.paymentDetails.senderUpi : 'N/A'}</b><br>
-                            Amt: <b>₹${a.paymentDetails ? a.paymentDetails.amountPaid : '0'}</b>
+                            UPI: <b>${a.paymentDetails ? a.paymentDetails.senderUpi : 'N/A'}</b>
                         </td>
                         <td>
-                            <button class="btn btn-success" onclick="updateStatus('${a.id}', 'approved')">Verify & Approve</button>
+                            <button class="btn btn-success" onclick="updateStatus('${a.id}', 'approved')">Verify</button>
                             <button class="btn btn-danger" onclick="updateStatus('${a.id}', 'rejected')">Reject</button>
                         </td>
                     </tr>
@@ -1188,9 +1226,7 @@ const showAdminTab = (tab) => {
                         <td>${a.name}</td>
                         <td>${a.downloads}</td>
                         <td><button onclick="toggleFeature('${a.id}', ${a.featured})">${a.featured ? 'Yes' : 'No'}</button></td>
-                        <td>
-                            <button class="btn btn-danger" onclick="deleteApp('${a.id}')">Delete</button>
-                        </td>
+                        <td><button class="btn btn-danger" onclick="deleteApp('${a.id}')">Delete</button></td>
                     </tr>
                 `).join('')}
             </table>`;
@@ -1198,14 +1234,8 @@ const showAdminTab = (tab) => {
         const totalDL = apps.reduce((s, a) => s + a.downloads, 0);
         content = `<h3>Analytics</h3>
             <div class="app-card">
-                <div>
-                    <h2>${apps.length}</h2>
-                    <p>Total Uploads</p>
-                </div>
-                <div>
-                    <h2>${totalDL}</h2>
-                    <p>Total Downloads</p>
-                </div>
+                <div><h2>${apps.length}</h2><p>Total Uploads</p></div>
+                <div><h2>${totalDL}</h2><p>Total Downloads</p></div>
             </div>`;
     }
     container.innerHTML = content;
@@ -1213,7 +1243,7 @@ const showAdminTab = (tab) => {
 
 const updateStatus = async (id, status) => {
     if(status === 'rejected') {
-        if(!confirm("Reject this app and remove it?")) return;
+        if(!confirm("Reject this app?")) return;
         await db.collection("apps").doc(id).delete();
     } else {
         await db.collection("apps").doc(id).update({ status: status });
@@ -1227,11 +1257,11 @@ const toggleFeature = async (id, currentStatus) => {
 };
 
 const deleteApp = async (id) => {
-    if(confirm('Delete this app permanently?')) {
+    if(confirm('Delete permanently?')) {
         await db.collection("apps").doc(id).delete();
         showAdminTab('approved');
     }
 };
 </script>
 </body>
-        </html>
+    </html>
