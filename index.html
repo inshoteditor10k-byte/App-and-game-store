@@ -6,9 +6,9 @@
 <title>App Plus Game Store</title>
 <style>
     :root {
-        --primary: #ff9933; /* Saffronish */
-        --secondary: #138808; /* Greenish */
-        --accent: #000080; /* Navy Blue */
+        --primary: #ff9933;
+        --secondary: #138808;
+        --accent: #000080;
         --bg-light: #f4f6f9;
         --text-light: #1a1a1a;
         --card-light: #ffffff;
@@ -225,7 +225,7 @@
     <!-- Hero/Featured -->
     <div class="section-title">Featured & Trending</div>
     <div class="app-grid" id="featuredGrid">
-    <!-- JS Populated -->
+        <p style="padding:0 5%">Loading apps...</p>
     </div>
 
     <!-- Filters -->
@@ -281,7 +281,6 @@
                 </div>
             </div>
             
-            <!-- Premium Section -->
             <div class="form-group" style="padding: 10px; border: 1px dashed var(--primary); border-radius: 8px;">
                 <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
                     <input type="checkbox" id="uIsPremium" onchange="togglePremiumInput()">
@@ -325,17 +324,15 @@
     </div>
 </div>
 
-<!-- Payment Verification Modal (UPDATED) -->
+<!-- Payment Verification Modal -->
 <div id="paymentModal" class="modal hidden">
     <div class="modal-content" style="text-align:center;">
         <h2 style="color:var(--primary);">Payment Required</h2>
         
-        <!-- DIRECT PAY BUTTON -->
         <a id="upiPayBtn" href="#" class="btn btn-primary upi-direct-btn">
             Pay Now via UPI App
         </a>
 
-        <!-- STRICT WARNING -->
         <div class="payment-alert">
             WARNING: After payment, you MUST enter the EXACT Name & UPI ID shown in your payment history. If details do not match, your app will be REJECTED permanently.
         </div>
@@ -385,7 +382,7 @@
     </header>
 
     <div class="admin-tabs">
-        <button class="btn btn-primary" onclick="showAdminTab('pending')">Pending (Payment Check)</button>
+        <button class="btn btn-primary" onclick="showAdminTab('pending')">Pending</button>
         <button class="btn btn-secondary" onclick="showAdminTab('approved')">Approved</button>
         <button class="btn btn-secondary" onclick="showAdminTab('analytics')">Analytics</button>
     </div>
@@ -404,15 +401,81 @@
 <script>
 // --- State Management ---
 const ADMIN_PASS = "ss620631";
-const RECEIVER_UPI = "6206319727@fam"; // Admin UPI
-let apps = JSON.parse(localStorage.getItem('appPlus_apps')) || [];
+const RECEIVER_UPI = "6206319727@fam"; 
+let apps = []; // Apps are now loaded async from DB
 let currentCategory = 'All';
-let tempAppData = {}; // Stores app data before payment
+let tempAppData = {}; 
+let db; // IndexedDB instance
+
+// --- IndexedDB Configuration (Fixes Refresh Issue) ---
+const DB_NAME = 'AppPlusDB';
+const DB_VERSION = 1;
+const STORE_NAME = 'apps';
+
+const initDB = () => {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        
+        request.onerror = (event) => {
+            console.error("DB Error", event);
+            reject('Database error');
+        };
+
+        request.onupgradeneeded = (event) => {
+            db = event.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+            }
+        };
+
+        request.onsuccess = (event) => {
+            db = event.target.result;
+            loadAppsFromDB().then(() => resolve());
+        };
+    });
+};
+
+const saveAppToDB = (app) => {
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        store.put(app);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject();
+    });
+};
+
+const loadAppsFromDB = () => {
+    return new Promise((resolve) => {
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        const request = store.getAll();
+        
+        request.onsuccess = () => {
+            apps = request.result || [];
+            renderHome();
+            resolve();
+        };
+    });
+};
+
+const deleteAppFromDB = (id) => {
+    return new Promise((resolve) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        store.delete(id);
+        tx.oncomplete = () => {
+            apps = apps.filter(a => a.id !== id);
+            resolve();
+        };
+    });
+};
 
 // --- Init ---
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
-    renderHome();
+    // Initialize DB first, then render
+    initDB();
 });
 
 // --- Utils ---
@@ -451,6 +514,17 @@ const formatSize = (bytes) => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
+function dataURItoBlob(dataURI) {
+    var byteString = atob(dataURI.split(',')[1]);
+    var mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
+    var ab = new ArrayBuffer(byteString.length);
+    var ia = new Uint8Array(ab);
+    for (var i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+    }
+    return new Blob([ab], {type: mimeString});
+}
+
 // --- Core Logic ---
 
 const openUploadModal = () => {
@@ -482,7 +556,6 @@ const togglePremiumInput = () => {
     }
 };
 
-// Step 1: Collect Data & Files (REAL DATA)
 const handleUploadStep1 = async (e) => {
     e.preventDefault();
 
@@ -494,7 +567,6 @@ const handleUploadStep1 = async (e) => {
     const desc = document.getElementById('uDesc').value;
     const tags = document.getElementById('uTags').value.split(',').map(t => t.trim());
     
-    // Premium Logic
     const isPremium = document.getElementById('uIsPremium').checked;
     const appPrice = isPremium ? document.getElementById('uPrice').value : 'Free';
     const listingFee = isPremium ? 100 : 10;
@@ -505,8 +577,6 @@ const handleUploadStep1 = async (e) => {
 
     try {
         const logoBase64 = await getFileBase64(logoFile);
-
-        // REAL FILE PROCESSING (No Limits checked here, browser will throttle if too huge)
         const apkData = await getFileBase64(apkFile);
 
         const screenshots = [];
@@ -516,13 +586,12 @@ const handleUploadStep1 = async (e) => {
             }
         }
 
-        // Save to temp global variable
         tempAppData = {
             id: Date.now().toString(),
             name, developer: dev, email, category: cat, version: ver, description: desc, tags,
             logo: logoBase64,
             screenshots,
-            apkData: apkData, // Storing REAL file data
+            apkData: apkData, 
             fileSize: apkFile.size,
             isPremium: isPremium,
             appPrice: appPrice,
@@ -534,7 +603,6 @@ const handleUploadStep1 = async (e) => {
             date: new Date().toISOString()
         };
 
-        // Construct Deep Link for Payment
         const upiLink = `upi://pay?pa=${RECEIVER_UPI}&pn=AppPlusStore&am=${listingFee}&cu=INR&tn=AppListingFee`;
         
         const btn = document.getElementById('upiPayBtn');
@@ -545,13 +613,12 @@ const handleUploadStep1 = async (e) => {
         document.getElementById('paymentModal').classList.remove('hidden');
 
     } catch (err) {
-        alert('Error processing files. If the file is extremely large, the browser may crash.');
+        alert('Error processing files. Try smaller files if this persists.');
         console.error(err);
     }
 };
 
-// Step 2: Finalize with Payment Info
-const finalizeSubmission = (e) => {
+const finalizeSubmission = async (e) => {
     e.preventDefault();
     
     const senderName = document.getElementById('paySenderName').value;
@@ -565,24 +632,20 @@ const finalizeSubmission = (e) => {
         amountPaid: tempAppData.listingFee
     };
 
-    // Try to save to LocalStorage (Real Persistence)
     try {
+        await saveAppToDB(tempAppData);
         apps.push(tempAppData);
-        localStorage.setItem('appPlus_apps', JSON.stringify(apps));
-        alert('Submission Successful! Admin will verify payment from ' + senderName + '.');
+        alert('Submission Successful! App saved permanently on THIS device.');
     } catch(err) {
-        // Fallback for massive files that break LocalStorage
-        alert("Warning: App stored in Memory only (File too large for persistent Browser Storage). It will disappear on refresh, but works for this session.");
-        // We keep 'apps' in memory, so it still works now
+        alert("Error saving to database. Ensure you have enough storage.");
     }
 
     closeModal('paymentModal');
     document.getElementById('uploadForm').reset();
     tempAppData = {}; 
+    renderHome();
 };
 
-
-// 2. Rendering
 const renderHome = () => {
     const grid = document.getElementById('appGrid');
     const featGrid = document.getElementById('featuredGrid');
@@ -652,7 +715,6 @@ const handleSearch = () => {
     renderHome();
 };
 
-// 3. App Details & Download
 const openDetail = (id) => {
     const app = apps.find(a => a.id === id);
     if(!app) return;
@@ -689,7 +751,6 @@ const openDetail = (id) => {
         
         ${actionButton}
 
-        <!-- Reviews -->
         <div class="reviews-section">
             <h3>Rate & Review</h3>
             <div class="form-group">
@@ -734,19 +795,25 @@ const downloadApp = (id) => {
         btn.classList.add('download-anim');
     }
 
-    // Simulate Network Delay for realism
-    setTimeout(() => {
+    setTimeout(async () => {
         app.downloads++;
-        // Try to save download count
-        try { localStorage.setItem('appPlus_apps', JSON.stringify(apps)); } catch(e){}
+        await saveAppToDB(app); // Save new download count
         
-        // REAL DOWNLOAD LOGIC
-        const a = document.createElement('a');
-        a.href = app.apkData; // Uses the Base64 data of the actual file
-        a.download = app.name + ".apk"; // Sets the correct filename
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        try {
+            const blob = dataURItoBlob(app.apkData);
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = app.name + ".apk";
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } catch (error) {
+            console.error("Download failed:", error);
+            alert("Download failed.");
+        }
 
         if(btn) {
             btn.innerHTML = "Installed!";
@@ -756,14 +823,15 @@ const downloadApp = (id) => {
     }, 1500);
 };
 
-const submitReview = (id) => {
+const submitReview = async (id) => {
     const stars = parseInt(document.getElementById('rStars').value);
     const comment = document.getElementById('rComment').value;
     if(!comment) return alert('Please write a comment');
 
     const app = apps.find(a => a.id === id);
     app.ratings.unshift({ stars, comment, date: new Date().toISOString() });
-    try { localStorage.setItem('appPlus_apps', JSON.stringify(apps)); } catch(e){}
+    
+    await saveAppToDB(app); // Save review to DB
     openDetail(id); 
 };
 
@@ -857,37 +925,37 @@ const showAdminTab = (tab) => {
     container.innerHTML = content;
 };
 
-const updateStatus = (id, status) => {
+const updateStatus = async (id, status) => {
     const app = apps.find(a => a.id === id);
     if(app) {
         app.status = status;
         if(status === 'rejected') {
             if(confirm("Reject this app and remove it?")) {
-                apps = apps.filter(a => a.id !== id);
+                await deleteAppFromDB(id);
+                showAdminTab('pending');
+                return;
             }
         }
-        try { localStorage.setItem('appPlus_apps', JSON.stringify(apps)); } catch(e){}
+        await saveAppToDB(app);
         showAdminTab('pending');
     }
 };
 
-const toggleFeature = (id) => {
+const toggleFeature = async (id) => {
     const app = apps.find(a => a.id === id);
     if(app) {
         app.featured = !app.featured;
-        try { localStorage.setItem('appPlus_apps', JSON.stringify(apps)); } catch(e){}
+        await saveAppToDB(app);
         showAdminTab('approved');
     }
 };
 
-const deleteApp = (id) => {
+const deleteApp = async (id) => {
     if(confirm('Delete this app permanently?')) {
-        apps = apps.filter(a => a.id !== id);
-        try { localStorage.setItem('appPlus_apps', JSON.stringify(apps)); } catch(e){}
+        await deleteAppFromDB(id);
         showAdminTab('approved');
     }
 };
-
 </script>
 </body>
-</html>
+        </html>
