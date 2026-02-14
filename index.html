@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>App Plus Game Store</title>
+<!-- Firebase SDKs (Zaroori hain online database ke liye) -->
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-storage-compat.js"></script>
+
 <style>
     :root {
         --primary: #ff9933;
@@ -319,7 +324,7 @@
                 <label>APK File *</label>
                 <input type="file" id="uApk" required>
             </div>
-            <button type="submit" class="btn btn-primary" style="width:100%;">Proceed to Payment</button>
+            <button type="submit" class="btn btn-primary" id="uploadBtn" style="width:100%;">Proceed to Payment</button>
         </form>
     </div>
 </div>
@@ -399,86 +404,60 @@
 </footer>
 
 <script>
+// ==========================================
+// 🔴 IMPORTANT: FIREBASE CONFIGURATION 🔴
+// Niche di gayi jagah mein apni asli keys dalein
+// ==========================================
+const firebaseConfig = {
+  apiKey: "AIzaSyDpF0VyF-4MeniRCO1L1oMhYtR5uBZkklU",
+  authDomain: "apps-and-games-store-8c442.firebaseapp.com",
+  databaseURL: "https://apps-and-games-store-8c442-default-rtdb.firebaseio.com",
+  projectId: "apps-and-games-store-8c442",
+  storageBucket: "apps-and-games-store-8c442.firebasestorage.app",
+  messagingSenderId: "320735195272",
+  appId: "1:320735195272:web:f6d8693160baf6eaf8af3d"
+};
+
+// Initialize Firebase
+try {
+    firebase.initializeApp(firebaseConfig);
+} catch (e) {
+    console.error("Firebase Init Error: Keys might be missing");
+}
+
+const db = firebase.firestore();
+const storage = firebase.storage();
+
 // --- State Management ---
 const ADMIN_PASS = "ss620631";
 const RECEIVER_UPI = "6206319727@fam"; 
-let apps = []; // Apps are now loaded async from DB
+let apps = []; 
 let currentCategory = 'All';
 let tempAppData = {}; 
-let db; // IndexedDB instance
 
-// --- IndexedDB Configuration (Fixes Refresh Issue) ---
-const DB_NAME = 'AppPlusDB';
-const DB_VERSION = 1;
-const STORE_NAME = 'apps';
+// --- Core Logic ---
 
-const initDB = () => {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
-        
-        request.onerror = (event) => {
-            console.error("DB Error", event);
-            reject('Database error');
-        };
-
-        request.onupgradeneeded = (event) => {
-            db = event.target.result;
-            if (!db.objectStoreNames.contains(STORE_NAME)) {
-                db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-            }
-        };
-
-        request.onsuccess = (event) => {
-            db = event.target.result;
-            loadAppsFromDB().then(() => resolve());
-        };
-    });
-};
-
-const saveAppToDB = (app) => {
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        store.put(app);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject();
-    });
-};
-
-const loadAppsFromDB = () => {
-    return new Promise((resolve) => {
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const store = tx.objectStore(STORE_NAME);
-        const request = store.getAll();
-        
-        request.onsuccess = () => {
-            apps = request.result || [];
-            renderHome();
-            resolve();
-        };
-    });
-};
-
-const deleteAppFromDB = (id) => {
-    return new Promise((resolve) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        store.delete(id);
-        tx.oncomplete = () => {
-            apps = apps.filter(a => a.id !== id);
-            resolve();
-        };
-    });
-};
-
-// --- Init ---
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
-    // Initialize DB first, then render
-    initDB();
+    loadAppsFromDB(); // Load from Cloud
 });
 
-// --- Utils ---
+const loadAppsFromDB = () => {
+    // Realtime listener for apps
+    db.collection("apps").onSnapshot((querySnapshot) => {
+        apps = [];
+        querySnapshot.forEach((doc) => {
+            let data = doc.data();
+            data.id = doc.id;
+            apps.push(data);
+        });
+        renderHome();
+    }, (error) => {
+        console.error("Error loading apps:", error);
+        document.getElementById('featuredGrid').innerHTML = '<p style="padding:0 5%; color:red;">Error connecting to server. Check Config.</p>';
+    });
+};
+
 const initTheme = () => {
     const saved = localStorage.getItem('theme');
     if(saved === 'dark') {
@@ -497,15 +476,6 @@ const toggleTheme = () => {
     document.getElementById('themeBtn').innerText = isDark ? '☀️' : '🌙';
 };
 
-const getFileBase64 = (file) => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = error => reject(error);
-    });
-};
-
 const formatSize = (bytes) => {
     if(bytes === 0) return '0 B';
     const k = 1024;
@@ -513,19 +483,6 @@ const formatSize = (bytes) => {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
-
-function dataURItoBlob(dataURI) {
-    var byteString = atob(dataURI.split(',')[1]);
-    var mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
-    var ab = new ArrayBuffer(byteString.length);
-    var ia = new Uint8Array(ab);
-    for (var i = 0; i < byteString.length; i++) {
-        ia[i] = byteString.charCodeAt(i);
-    }
-    return new Blob([ab], {type: mimeString});
-}
-
-// --- Core Logic ---
 
 const openUploadModal = () => {
     document.getElementById('uploadModal').classList.remove('hidden');
@@ -556,8 +513,17 @@ const togglePremiumInput = () => {
     }
 };
 
+const uploadFileToStorage = async (file, path) => {
+    const ref = storage.ref(path);
+    await ref.put(file);
+    return await ref.getDownloadURL();
+};
+
 const handleUploadStep1 = async (e) => {
     e.preventDefault();
+    const btn = document.getElementById('uploadBtn');
+    btn.innerText = "Uploading Files... Please Wait";
+    btn.disabled = true;
 
     const name = document.getElementById('uName').value;
     const dev = document.getElementById('uDev').value;
@@ -576,22 +542,24 @@ const handleUploadStep1 = async (e) => {
     const ssInputs = document.querySelectorAll('.ss-input');
 
     try {
-        const logoBase64 = await getFileBase64(logoFile);
-        const apkData = await getFileBase64(apkFile);
+        // Upload to Firebase Storage
+        const ts = Date.now();
+        const logoUrl = await uploadFileToStorage(logoFile, `logos/${ts}_${logoFile.name}`);
+        const apkUrl = await uploadFileToStorage(apkFile, `apks/${ts}_${apkFile.name}`);
 
         const screenshots = [];
         for (let input of ssInputs) {
             if (input.files[0]) {
-                screenshots.push(await getFileBase64(input.files[0]));
+                const ssUrl = await uploadFileToStorage(input.files[0], `screens/${ts}_${input.files[0].name}`);
+                screenshots.push(ssUrl);
             }
         }
 
         tempAppData = {
-            id: Date.now().toString(),
             name, developer: dev, email, category: cat, version: ver, description: desc, tags,
-            logo: logoBase64,
+            logo: logoUrl,
             screenshots,
-            apkData: apkData, 
+            apkUrl: apkUrl, // Saving URL instead of Base64
             fileSize: apkFile.size,
             isPremium: isPremium,
             appPrice: appPrice,
@@ -605,16 +573,19 @@ const handleUploadStep1 = async (e) => {
 
         const upiLink = `upi://pay?pa=${RECEIVER_UPI}&pn=AppPlusStore&am=${listingFee}&cu=INR&tn=AppListingFee`;
         
-        const btn = document.getElementById('upiPayBtn');
-        btn.href = upiLink;
-        btn.innerText = `Pay ₹${listingFee} Now`;
+        const payBtn = document.getElementById('upiPayBtn');
+        payBtn.href = upiLink;
+        payBtn.innerText = `Pay ₹${listingFee} Now`;
 
         closeModal('uploadModal');
         document.getElementById('paymentModal').classList.remove('hidden');
 
     } catch (err) {
-        alert('Error processing files. Try smaller files if this persists.');
+        alert('Error uploading files. Check internet or Firebase config.');
         console.error(err);
+    } finally {
+        btn.innerText = "Proceed to Payment";
+        btn.disabled = false;
     }
 };
 
@@ -633,17 +604,15 @@ const finalizeSubmission = async (e) => {
     };
 
     try {
-        await saveAppToDB(tempAppData);
-        apps.push(tempAppData);
-        alert('Submission Successful! App saved permanently on THIS device.');
+        await db.collection("apps").add(tempAppData);
+        alert('Submission Successful! App sent to Server.');
     } catch(err) {
-        alert("Error saving to database. Ensure you have enough storage.");
+        alert("Error saving to database: " + err.message);
     }
 
     closeModal('paymentModal');
     document.getElementById('uploadForm').reset();
     tempAppData = {}; 
-    renderHome();
 };
 
 const renderHome = () => {
@@ -658,7 +627,8 @@ const renderHome = () => {
     const featured = approvedApps.filter(a => a.featured);
 
     const displaySet = new Set([...trending, ...featured]);
-    displaySet.forEach(app => {
+    // Use Array.from because Set iteration can be tricky with complex objects in some polyfills
+    Array.from(displaySet).forEach(app => {
         featGrid.appendChild(createAppCard(app, true));
     });
 
@@ -667,7 +637,7 @@ const renderHome = () => {
     const searchQ = document.getElementById('searchInput').value.toLowerCase();
     
     const filtered = approvedApps.filter(app => {
-        const tagMatch = app.tags.some(t => t.toLowerCase().includes(searchQ));
+        const tagMatch = app.tags && app.tags.some(t => t.toLowerCase().includes(searchQ));
         const catMatch = currentCategory === 'All' || app.category === currentCategory;
         return tagMatch && catMatch;
     });
@@ -684,7 +654,8 @@ const createAppCard = (app, isHighlight = false) => {
     div.className = 'app-card';
     div.onclick = () => openDetail(app.id);
 
-    const avgRating = app.ratings.length ? (app.ratings.reduce((a,b)=>a+b.stars,0)/app.ratings.length).toFixed(1) : 'New';
+    const ratingList = app.ratings || [];
+    const avgRating = ratingList.length ? (ratingList.reduce((a,b)=>a+b.stars,0)/ratingList.length).toFixed(1) : 'New';
 
     div.innerHTML = `
         <img src="${app.logo}" class="app-logo" alt="logo">
@@ -722,11 +693,23 @@ const openDetail = (id) => {
     const modal = document.getElementById('detailModal');
     const content = document.getElementById('detailContent');
     
-    const avgRating = app.ratings.length ? (app.ratings.reduce((a,b)=>a+b.stars,0)/app.ratings.length).toFixed(1) : '0.0';
+    const ratingList = app.ratings || [];
+    const avgRating = ratingList.length ? (ratingList.reduce((a,b)=>a+b.stars,0)/ratingList.length).toFixed(1) : '0.0';
 
     const actionButton = app.isPremium 
         ? `<button class="btn btn-primary download-btn" onclick="downloadApp('${app.id}')">Buy for ₹${app.appPrice}</button>`
         : `<button class="btn btn-primary download-btn" id="dlBtn" onclick="downloadApp('${app.id}')">Download Now (${formatSize(app.fileSize)})</button>`;
+
+    const screenshotsHtml = app.screenshots ? app.screenshots.map(s => `<img src="${s}" class="screenshot-preview">`).join('') : '';
+    const reviewsHtml = ratingList.map(r => `
+        <div class="review-item">
+            <div style="display:flex; justify-content:space-between;">
+                <strong>${'★'.repeat(r.stars)}</strong>
+                <small>${new Date(r.date).toLocaleDateString()}</small>
+            </div>
+            <p>${r.comment}</p>
+        </div>
+    `).join('');
 
     content.innerHTML = `
         <span class="close-modal" onclick="closeModal('detailModal')">&times;</span>
@@ -738,13 +721,13 @@ const openDetail = (id) => {
                 <p>${app.category} • v${app.version} • ${formatSize(app.fileSize)}</p>
                 <div style="margin-top:5px;">
                     <span class="rating-stars" style="font-size:1.2rem">★ ${avgRating}</span> 
-                    <span style="opacity:0.7">(${app.ratings.length} reviews)</span>
+                    <span style="opacity:0.7">(${ratingList.length} reviews)</span>
                 </div>
             </div>
         </div>
         
         <div class="screenshot-container">
-            ${app.screenshots.map(s => `<img src="${s}" class="screenshot-preview">`).join('')}
+            ${screenshotsHtml}
         </div>
 
         <p style="margin:20px 0; line-height:1.6;">${app.description}</p>
@@ -766,15 +749,7 @@ const openDetail = (id) => {
             </div>
             
             <div id="reviewsList">
-                ${app.ratings.map(r => `
-                    <div class="review-item">
-                        <div style="display:flex; justify-content:space-between;">
-                            <strong>${'★'.repeat(r.stars)}</strong>
-                            <small>${new Date(r.date).toLocaleDateString()}</small>
-                        </div>
-                        <p>${r.comment}</p>
-                    </div>
-                `).join('')}
+                ${reviewsHtml}
             </div>
         </div>
     `;
@@ -796,30 +771,25 @@ const downloadApp = (id) => {
     }
 
     setTimeout(async () => {
-        app.downloads++;
-        await saveAppToDB(app); // Save new download count
-        
-        try {
-            const blob = dataURItoBlob(app.apkData);
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            a.download = app.name + ".apk";
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-        } catch (error) {
-            console.error("Download failed:", error);
-            alert("Download failed.");
-        }
+        // Increment download count in Firestore
+        const appRef = db.collection("apps").doc(id);
+        appRef.update({
+            downloads: firebase.firestore.FieldValue.increment(1)
+        });
+
+        // Trigger Download from Firebase Storage URL
+        const a = document.createElement('a');
+        a.href = app.apkUrl;
+        a.target = "_blank"; // Open in new tab/start download
+        a.download = app.name + ".apk";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
 
         if(btn) {
             btn.innerHTML = "Installed!";
             btn.classList.remove('download-anim');
         }
-        renderHome(); 
     }, 1500);
 };
 
@@ -828,11 +798,18 @@ const submitReview = async (id) => {
     const comment = document.getElementById('rComment').value;
     if(!comment) return alert('Please write a comment');
 
-    const app = apps.find(a => a.id === id);
-    app.ratings.unshift({ stars, comment, date: new Date().toISOString() });
-    
-    await saveAppToDB(app); // Save review to DB
-    openDetail(id); 
+    const appRef = db.collection("apps").doc(id);
+    const newRating = { stars, comment, date: new Date().toISOString() };
+
+    try {
+        await appRef.update({
+            ratings: firebase.firestore.FieldValue.arrayUnion(newRating)
+        });
+        alert("Review Submitted");
+        openDetail(id); // Reload modal to see new review
+    } catch(err) {
+        console.error("Review Error", err);
+    }
 };
 
 // 4. Admin System
@@ -901,7 +878,7 @@ const showAdminTab = (tab) => {
                     <tr>
                         <td>${a.name}</td>
                         <td>${a.downloads}</td>
-                        <td><button onclick="toggleFeature('${a.id}')">${a.featured ? 'Yes' : 'No'}</button></td>
+                        <td><button onclick="toggleFeature('${a.id}', ${a.featured})">${a.featured ? 'Yes' : 'No'}</button></td>
                         <td>
                             <button class="btn btn-danger" onclick="deleteApp('${a.id}')">Delete</button>
                         </td>
@@ -926,36 +903,26 @@ const showAdminTab = (tab) => {
 };
 
 const updateStatus = async (id, status) => {
-    const app = apps.find(a => a.id === id);
-    if(app) {
-        app.status = status;
-        if(status === 'rejected') {
-            if(confirm("Reject this app and remove it?")) {
-                await deleteAppFromDB(id);
-                showAdminTab('pending');
-                return;
-            }
-        }
-        await saveAppToDB(app);
-        showAdminTab('pending');
+    if(status === 'rejected') {
+        if(!confirm("Reject this app and remove it?")) return;
+        await db.collection("apps").doc(id).delete();
+    } else {
+        await db.collection("apps").doc(id).update({ status: status });
     }
+    showAdminTab('pending');
 };
 
-const toggleFeature = async (id) => {
-    const app = apps.find(a => a.id === id);
-    if(app) {
-        app.featured = !app.featured;
-        await saveAppToDB(app);
-        showAdminTab('approved');
-    }
+const toggleFeature = async (id, currentStatus) => {
+    await db.collection("apps").doc(id).update({ featured: !currentStatus });
+    showAdminTab('approved');
 };
 
 const deleteApp = async (id) => {
     if(confirm('Delete this app permanently?')) {
-        await deleteAppFromDB(id);
+        await db.collection("apps").doc(id).delete();
         showAdminTab('approved');
     }
 };
 </script>
 </body>
-        </html>
+    </html>
