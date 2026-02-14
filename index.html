@@ -361,7 +361,10 @@
             <small style="color:var(--primary);">Compulsory for earning from Premium Apps</small>
         </div>
 
-        <button class="btn btn-danger" onclick="logout()" style="width:100%; margin-top:10px;">Logout</button>
+        <!-- LOGOUT BUTTON (Already present, reinforced functionality) -->
+        <button class="btn btn-danger" onclick="logout()" style="width:100%; margin-top:20px; font-weight:bold;">
+            🚪 Logout
+        </button>
     </div>
 </div>
 
@@ -614,7 +617,16 @@ const googleLogin = () => {
     auth.signInWithPopup(provider).catch(e => alert(e.message));
 };
 
-const logout = () => auth.signOut();
+// LOGOUT FUNCTION (Linked to Profile Modal)
+const logout = () => {
+    // Close modal first
+    closeModal('profileModal');
+    // Sign out from Firebase
+    auth.signOut().then(() => {
+        // UI updates automatically via onAuthStateChanged
+        alert("Logged out successfully");
+    }).catch(e => alert(e.message));
+};
 
 const openProfileModal = async () => {
     if(!currentUser) return;
@@ -724,12 +736,12 @@ const uploadFileToStorage = async (file, path) => {
 };
 
 // =======================================================
-// 3. UPLOAD LOGIC (Pays Admin)
+// 3. OPTIMIZED UPLOAD LOGIC (FIXED SLOW SPEED)
 // =======================================================
 const handleUploadStep1 = async (e) => {
     e.preventDefault();
     const btn = document.getElementById('uploadBtn');
-    btn.innerText = "Uploading Files... Please Wait";
+    btn.innerText = "🚀 Uploading Files (Parallel)... Please Wait";
     btn.disabled = true;
 
     const name = document.getElementById('uName').value;
@@ -750,16 +762,30 @@ const handleUploadStep1 = async (e) => {
 
     try {
         const ts = Date.now();
-        const logoUrl = await uploadFileToStorage(logoFile, `logos/${ts}_${logoFile.name}`);
-        const apkUrl = await uploadFileToStorage(apkFile, `apks/${ts}_${apkFile.name}`);
+        
+        // --- PARALLEL UPLOAD FIX START ---
+        // Instead of awaiting one by one, we create all promises and await them together.
+        
+        // 1. Prepare Logo Upload
+        const logoPromise = uploadFileToStorage(logoFile, `logos/${ts}_${logoFile.name}`);
+        
+        // 2. Prepare APK Upload
+        const apkPromise = uploadFileToStorage(apkFile, `apks/${ts}_${apkFile.name}`);
 
-        const screenshots = [];
-        for (let input of ssInputs) {
-            if (input.files[0]) {
-                const ssUrl = await uploadFileToStorage(input.files[0], `screens/${ts}_${input.files[0].name}`);
-                screenshots.push(ssUrl);
-            }
-        }
+        // 3. Prepare Screenshot Uploads
+        const ssFiles = [];
+        ssInputs.forEach(input => {
+            if(input.files[0]) ssFiles.push(input.files[0]);
+        });
+        
+        const ssPromises = ssFiles.map(file => 
+            uploadFileToStorage(file, `screens/${ts}_${file.name}`)
+        );
+
+        // 4. Execute All in Parallel
+        const [logoUrl, apkUrl] = await Promise.all([logoPromise, apkPromise]);
+        const screenshots = await Promise.all(ssPromises);
+        // --- PARALLEL UPLOAD FIX END ---
 
         tempAppData = {
             name, developer: dev, email, category: cat, version: ver, description: desc, tags,
@@ -795,7 +821,7 @@ const handleUploadStep1 = async (e) => {
         document.getElementById('paymentModal').classList.remove('hidden');
 
     } catch (err) {
-        alert('Error uploading files.');
+        alert('Error uploading files. Check internet connection.');
         console.error(err);
     } finally {
         btn.innerText = "Proceed to Payment";
@@ -1208,4 +1234,4 @@ const deleteApp = async (id) => {
 };
 </script>
 </body>
-</html>
+        </html>
