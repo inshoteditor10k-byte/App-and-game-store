@@ -120,7 +120,7 @@
     .logo { font-size: 1.5rem; font-weight: bold; color: var(--primary); display: flex; align-items: center; gap: 10px; }
     .logo span { color: var(--accent); }
     
-    /* ======================= MODIFICATION START: Advanced Search Styles ======================= */
+    /* Advanced Search Styles */
     .search-container {
         flex-grow: 1;
         max-width: 500px;
@@ -177,11 +177,11 @@
         padding: 8px 15px;
         background: transparent;
         color: var(--text-color);
-        min-width: 150px; /* Ensures input is usable when tags fill space */
+        min-width: 150px;
     }
     #suggestionsDropdown {
         position: absolute;
-        top: 110%; /* Position below the search bar */
+        top: 110%;
         left: 0;
         width: 100%;
         background: var(--card-bg);
@@ -207,7 +207,6 @@
         height: 30px;
         border-radius: 6px;
     }
-    /* ======================= MODIFICATION END ======================= */
 
 
     /* Hero */
@@ -269,27 +268,6 @@
     }
     @keyframes slideUp { from { transform: translateY(50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
     .close-modal { position: absolute; top: 15px; right: 20px; font-size: 24px; cursor: pointer; }
-
-    /* PROGRESS BAR STYLES */
-    .progress-container {
-        width: 100%;
-        background-color: #e0e0e0;
-        border-radius: 10px;
-        margin-top: 15px;
-        height: 20px;
-        overflow: hidden;
-    }
-    .progress-bar {
-        width: 0%;
-        height: 100%;
-        background: linear-gradient(90deg, var(--primary), var(--secondary));
-        transition: width 0.2s ease;
-        text-align: center;
-        line-height: 20px;
-        color: white;
-        font-size: 12px;
-        font-weight: bold;
-    }
 
     /* Forms */
     .form-group { margin-bottom: 15px; }
@@ -395,7 +373,6 @@
             AppPlus <span>Store</span>
         </div>
         
-        <!-- ======================= MODIFICATION START: Advanced Search HTML Structure ======================= -->
         <div class="search-container">
             <div class="search-bar">
                 <div id="tagContainer"></div>
@@ -403,7 +380,6 @@
             </div>
             <div id="suggestionsDropdown" class="hidden"></div>
         </div>
-        <!-- ======================= MODIFICATION END ======================= -->
 
         <div style="display:flex; gap:10px; align-items:center;">
             <button class="btn btn-secondary" onclick="toggleTheme()" id="themeBtn">🌙</button>
@@ -555,18 +531,15 @@
                 <button type="button" class="btn btn-secondary" onclick="addScreenshotField()" style="font-size:0.8rem; margin-top:5px;">+ Add Screenshot URL</button>
             </div>
             
+            <!-- ======================= MODIFICATION START: APK File Input changed to URL Input ======================= -->
             <div class="form-group">
-                <label>APK File *</label>
-                <input type="file" id="uApk" accept=".apk" required>
+                <label>APK File URL *</label>
+                <input type="text" id="uApkUrl" placeholder="Paste direct download link for the APK" required>
+                <small style="color:gray; font-size:0.8rem; margin-top:4px; display:block;">
+                    Ensure it's a direct download link, not a preview page (e.g., for Google Drive, use a direct link generator).
+                </small>
             </div>
-            
-            <!-- PROGRESS BAR UI -->
-            <div id="uploadProgressContainer" class="hidden" style="margin-bottom:15px;">
-                <div class="progress-container">
-                    <div id="uploadProgressBar" class="progress-bar">0%</div>
-                </div>
-                <p id="uploadProgressText" style="text-align:center; margin-top:5px; font-size:0.9rem;">Starting Upload...</p>
-            </div>
+            <!-- ======================= MODIFICATION END ======================= -->
 
             <button type="submit" class="btn btn-primary" id="uploadBtn" style="width:100%;">Proceed to Payment</button>
         </form>
@@ -678,9 +651,7 @@ let apps = [];
 let currentUser = null;
 let currentCategory = 'All';
 let tempAppData = {}; 
-// ======================= MODIFICATION START: New state for search =======================
 let activeSearchTags = [];
-// ======================= MODIFICATION END =======================
 
 
 // =======================================================
@@ -791,7 +762,6 @@ const saveUserUpi = async () => {
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
     addScreenshotField(); 
-    // Add a listener to hide suggestions when clicking outside
     document.addEventListener('click', (event) => {
         const searchContainer = document.querySelector('.search-container');
         if (!searchContainer.contains(event.target)) {
@@ -833,7 +803,7 @@ const toggleTheme = () => {
 };
 
 const formatSize = (bytes) => {
-    if(!bytes) return '0 B';
+    if(!bytes || bytes === 0) return '';
     const k = 1024;
     const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -845,9 +815,6 @@ const openUploadModal = () => {
     document.getElementById('screenshotInputs').innerHTML = '';
     addScreenshotField();
     document.getElementById('logoPreview').style.display = 'none';
-    document.getElementById('uploadProgressContainer').classList.add('hidden');
-    document.getElementById('uploadProgressBar').style.width = '0%';
-    document.getElementById('uploadProgressBar').innerText = '0%';
     document.getElementById('uploadModal').classList.remove('hidden');
 };
 
@@ -894,43 +861,23 @@ const togglePremiumInput = () => {
     document.getElementById('freeInfoDiv').classList.toggle('hidden', isPrem);
 };
 
-const uploadFileWithProgress = (file, path, onProgress) => {
-    return new Promise((resolve, reject) => {
-        const ref = storage.ref(path);
-        const task = ref.put(file);
-
-        task.on('state_changed', 
-            (snapshot) => {
-                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                onProgress(progress);
-            },
-            (error) => reject(error),
-            async () => {
-                const url = await task.snapshot.ref.getDownloadURL();
-                resolve(url);
-            }
-        );
-    });
-};
-
+// ======================= MODIFICATION START: Upload handler now uses APK URL =======================
 const handleUploadStep1 = async (e) => {
     e.preventDefault();
     const btn = document.getElementById('uploadBtn');
     btn.innerText = "Processing...";
     btn.disabled = true;
-    const progressContainer = document.getElementById('uploadProgressContainer');
-    const progressBar = document.getElementById('uploadProgressBar');
-    const progressText = document.getElementById('uploadProgressText');
-    progressContainer.classList.remove('hidden');
 
+    // Get form data
     const name = document.getElementById('uName').value;
     const dev = document.getElementById('uDev').value;
     const email = document.getElementById('uEmail').value;
     const cat = document.getElementById('uCat').value;
     const ver = document.getElementById('uVer').value;
     const desc = document.getElementById('uDesc').value;
-    const tags = document.getElementById('uTags').value.split(',').map(t => t.trim());
+    const tags = document.getElementById('uTags').value.split(',').map(t => t.trim()).filter(Boolean);
     const logoUrl = document.getElementById('uLogoUrl').value;
+    const apkUrl = document.getElementById('uApkUrl').value.trim(); // Get APK URL from text input
     
     const screenshots = Array.from(document.querySelectorAll('.ss-url-input')).map(input => input.value.trim()).filter(Boolean);
 
@@ -938,36 +885,28 @@ const handleUploadStep1 = async (e) => {
     const appPrice = isPremium ? document.getElementById('uPrice').value : 'Free';
     const listingFee = isPremium ? 100 : 10;
 
-    const apkFile = document.getElementById('uApk').files[0];
-    if (!apkFile) {
-        alert("Please select an APK file.");
+    // Validate the APK URL input
+    if (!apkUrl) {
+        alert("Please provide a direct URL for the APK file.");
         btn.innerText = "Proceed to Payment";
         btn.disabled = false;
         return;
     }
 
     try {
-        const ts = Date.now();
-        progressText.innerText = "Starting APK upload...";
-        
-        const apkUrl = await uploadFileWithProgress(apkFile, `apks/${ts}_${apkFile.name}`, (p) => {
-            const perc = Math.round(p);
-            progressBar.style.width = perc + '%';
-            progressBar.innerText = perc + '%';
-            progressText.innerText = `Uploading APK: ${perc}%...`;
-        });
-
-        progressBar.style.background = '#2ed573';
-        progressText.innerText = "Upload Complete! Preparing Payment...";
-
+        // No file upload needed, just prepare data
         tempAppData = {
             name, developer: dev, email, category: cat, version: ver, description: desc, tags,
-            logo: logoUrl, screenshots, apkUrl, fileSize: apkFile.size,
+            logo: logoUrl, 
+            screenshots, 
+            apkUrl: apkUrl, // Use the URL directly from the input
+            fileSize: null, // File size is unknown when using a link
             isPremium, appPrice, listingFee,
             downloads: 0, status: 'pending', featured: false, ratings: [],
             uploaderUid: currentUser.uid, date: new Date().toISOString()
         };
 
+        // Proceed to payment
         const upiLink = `upi://pay?pa=${ADMIN_UPI}&pn=AppPlusAdmin&am=${listingFee}&cu=INR&tn=AppListingFee`;
         
         document.getElementById('upiPayBtn').href = upiLink;
@@ -976,21 +915,19 @@ const handleUploadStep1 = async (e) => {
         document.getElementById('payReceiverInfo').innerText = "Fee goes to Admin";
         document.getElementById('payContext').value = 'upload';
 
-        setTimeout(() => {
-            closeModal('uploadModal');
-            document.getElementById('paymentModal').classList.remove('hidden');
-        }, 1000);
+        closeModal('uploadModal');
+        document.getElementById('paymentModal').classList.remove('hidden');
 
     } catch (err) {
-        alert('Error uploading APK file.');
+        alert('An error occurred. Please check your inputs.');
         console.error(err);
-        progressBar.style.background = 'red';
-        progressText.innerText = "Upload Failed.";
     } finally {
         btn.innerText = "Proceed to Payment";
         btn.disabled = false;
     }
 };
+// ======================= MODIFICATION END =======================
+
 
 // =======================================================
 // 4. TRANSACTION & APP DISPLAY LOGIC
@@ -1047,7 +984,6 @@ const renderHome = () => {
 
     const approvedApps = apps.filter(a => a.status === 'approved');
 
-    // Featured and Trending Section (unaffected by search)
     const trending = [...approvedApps].sort((a,b) => b.downloads - a.downloads).slice(0, 3);
     const featured = approvedApps.filter(a => a.featured);
     const displaySet = new Set([...trending, ...featured]);
@@ -1056,16 +992,14 @@ const renderHome = () => {
     });
     if(displaySet.size === 0) featGrid.innerHTML = '<p style="padding:0 5%">No featured apps yet.</p>';
 
-    // Main grid filtering
     const filtered = approvedApps.filter(app => {
         const categoryMatch = currentCategory === 'All' || app.category === currentCategory;
         if (!categoryMatch) return false;
 
         if (activeSearchTags.length === 0) {
-            return true; // No tags, so show all in category
+            return true;
         }
 
-        // App must match ALL active search tags
         const appContent = [
             app.name.toLowerCase(), 
             ...(app.tags || []).map(t => t.toLowerCase())
@@ -1114,8 +1048,6 @@ const filterCategory = (cat) => {
     renderHome();
 };
 
-
-// ======================= MODIFICATION START: New Advanced Search Functions =======================
 const handleSearchInput = (event) => {
     const input = event.target;
     const value = input.value.trim();
@@ -1134,7 +1066,7 @@ const addTag = (tagText) => {
     if (cleanTag && !activeSearchTags.includes(cleanTag)) {
         activeSearchTags.push(cleanTag);
         renderTags();
-        renderHome(); // Re-filter results
+        renderHome();
     }
     hideSuggestions();
 };
@@ -1142,7 +1074,7 @@ const addTag = (tagText) => {
 const removeTag = (tagText) => {
     activeSearchTags = activeSearchTags.filter(t => t !== tagText);
     renderTags();
-    renderHome(); // Re-filter results
+    renderHome();
 };
 
 const editTag = (tagText) => {
@@ -1176,7 +1108,7 @@ const showSuggestions = (query) => {
     const lowerQuery = query.toLowerCase();
     const suggestions = apps
         .filter(app => app.status === 'approved' && (app.name.toLowerCase().includes(lowerQuery) || (app.tags || []).some(t => t.toLowerCase().includes(lowerQuery))))
-        .slice(0, 5); // Limit to 5 suggestions
+        .slice(0, 5);
 
     if (suggestions.length === 0) {
         hideSuggestions();
@@ -1187,7 +1119,6 @@ const showSuggestions = (query) => {
     suggestions.forEach(app => {
         const item = document.createElement('div');
         item.className = 'suggestion-item';
-        // When a suggestion is clicked, we add the APP NAME as a tag.
         item.onclick = () => {
             addTag(app.name);
             document.getElementById('searchInput').value = '';
@@ -1205,9 +1136,9 @@ const showSuggestions = (query) => {
 const hideSuggestions = () => {
     document.getElementById('suggestionsDropdown').classList.add('hidden');
 };
-// ======================= MODIFICATION END =======================
 
 
+// ======================= MODIFICATION START: openDetail handles missing fileSize =======================
 const openDetail = (id) => {
     const app = apps.find(a => a.id === id);
     if(!app) return;
@@ -1221,16 +1152,18 @@ const openDetail = (id) => {
     const isOwner = currentUser && currentUser.uid === app.uploaderUid;
     let actionButton = '';
 
+    const downloadButtonText = app.fileSize ? `Download Now (${formatSize(app.fileSize)})` : 'Download Now';
+
     if (isOwner) {
         actionButton = `<button class="btn btn-secondary download-btn" disabled>You Own This App</button>`;
     } else if (app.isPremium) {
         actionButton = `<button class="btn btn-primary download-btn" onclick="initiatePurchase('${app.id}')">Buy for ₹${app.appPrice}</button>`;
     } else {
-        actionButton = `<button class="btn btn-primary download-btn" id="dlBtn" onclick="startDownloadProcess('${app.id}')">Download Now (${formatSize(app.fileSize)})</button>`;
+        actionButton = `<button class="btn btn-primary download-btn" id="dlBtn" onclick="startDownloadProcess('${app.id}')">${downloadButtonText}</button>`;
     }
 
     const screenshotsHtml = (app.screenshots || []).map(s => `<img src="${s}" class="screenshot-preview" onerror="this.style.display='none'">`).join('');
-    const reviewsHtml = ratingList.map(r => `
+    const reviewsHtml = ratingList.length > 0 ? ratingList.map(r => `
         <div class="review-item">
             <div style="display:flex; justify-content:space-between;">
                 <strong>${'★'.repeat(r.stars)}</strong>
@@ -1238,7 +1171,9 @@ const openDetail = (id) => {
             </div>
             <p>${r.comment}</p>
         </div>
-    `).join('') || '<p>No reviews yet.</p>';
+    `).join('') : '<p>No reviews yet.</p>';
+    
+    const sizeInfo = app.fileSize ? ` • ${formatSize(app.fileSize)}` : '';
 
     content.innerHTML = `
         <span class="close-modal" onclick="closeModal('detailModal')">&times;</span>
@@ -1247,7 +1182,7 @@ const openDetail = (id) => {
             <div>
                 <h1>${app.name}</h1>
                 <p style="color:var(--primary); font-weight:bold;">${app.developer}</p>
-                <p>${app.category} • v${app.version} • ${formatSize(app.fileSize)}</p>
+                <p>${app.category} • v${app.version}${sizeInfo}</p>
                 <div style="margin-top:5px;">
                     <span class="rating-stars" style="font-size:1.2rem">★ ${avgRating}</span> 
                     <span style="opacity:0.7">(${ratingList.length} reviews)</span>
@@ -1284,6 +1219,7 @@ const openDetail = (id) => {
     `;
     modal.classList.remove('hidden');
 };
+// ======================= MODIFICATION END =======================
 
 const initiatePurchase = async (appId) => {
     const app = apps.find(a => a.id === appId);
@@ -1313,7 +1249,7 @@ const startDownloadProcess = (id) => {
     const btn = document.getElementById('dlBtn');
     
     if(btn) {
-        btn.innerHTML = "Downloading...";
+        btn.innerHTML = "Starting Download...";
         btn.classList.add('download-anim');
         btn.disabled = true;
     }
@@ -1324,23 +1260,19 @@ const startDownloadProcess = (id) => {
                 downloads: firebase.firestore.FieldValue.increment(1)
             });
 
-            const a = document.createElement('a');
-            a.href = app.apkUrl;
-            a.target = "_blank"; 
-            a.download = app.name + ".apk";
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
+            // This now opens the user-provided link
+            window.open(app.apkUrl, "_blank");
 
             if(btn) {
-                btn.innerHTML = "Installed!";
+                btn.innerHTML = "Download Started!";
                 btn.classList.remove('download-anim');
             }
         } catch(err) {
             console.error("Download error:", err);
-            alert("Could not start download.");
+            alert("Could not start download. The link might be broken.");
              if(btn) {
-                btn.innerHTML = `Download Now (${formatSize(app.fileSize)})`;
+                const downloadButtonText = app.fileSize ? `Download Now (${formatSize(app.fileSize)})` : 'Download Now';
+                btn.innerHTML = downloadButtonText;
                 btn.disabled = false;
             }
         }
@@ -1359,13 +1291,6 @@ const submitReview = async (id) => {
             ratings: firebase.firestore.FieldValue.arrayUnion(newRating)
         });
         alert("Review Submitted");
-        // Re-open detail modal to show the new review instantly
-        const updatedAppDoc = await db.collection("apps").doc(id).get();
-        const updatedAppData = updatedAppDoc.data();
-        const appIndex = apps.findIndex(a => a.id === id);
-        if(appIndex > -1) {
-            apps[appIndex] = {...updatedAppData, id: id};
-        }
         openDetail(id); 
     } catch(err) {
         console.error("Review Error", err);
@@ -1373,7 +1298,7 @@ const submitReview = async (id) => {
 };
 
 // =======================================================
-// 5. ADMIN LOGIC (UNCHANGED)
+// 5. ADMIN LOGIC
 // =======================================================
 const openAdminPrompt = () => {
     document.getElementById('adminLoginModal').classList.remove('hidden');
@@ -1417,7 +1342,7 @@ const showAdminTab = (tab) => {
                 <tr><th>App</th><th>Payment Details</th><th>Action</th></tr>
                 ${pending.map(a => `
                     <tr>
-                        <td><b>${a.name}</b><br>${a.isPremium ? 'Premium' : 'Free'}</td>
+                        <td><b>${a.name}</b><br><small><a href="${a.apkUrl}" target="_blank">Test Link</a></small></td>
                         <td style="font-size:0.85rem;">
                             Name: <b>${a.paymentDetails?.senderName || 'N/A'}</b><br>
                             UPI: <b>${a.paymentDetails?.senderUpi || 'N/A'}</b>
@@ -1484,4 +1409,4 @@ const deleteApp = async (id) => {
 
 </script>
 </body>
-    </html>
+</html>
