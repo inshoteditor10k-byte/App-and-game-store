@@ -280,11 +280,37 @@
     .screenshot-container { display: flex; gap: 10px; overflow-x: auto; padding: 10px 0; }
     .screenshot-preview { height: 100px; border-radius: 8px; }
 
-    /* --- NEW STYLES FOR URL INPUTS --- */
     .url-input-group { display: flex; gap: 5px; align-items: center; }
     .url-input-group input { flex-grow: 1; }
     .screenshot-url-group { margin-top: 10px; }
     .screenshot-url-preview { display: none; height: 100px; border-radius: 8px; margin-top: 5px; }
+    
+    /* ======================= MODIFICATION START: New Tag Input Styles for Upload Form ======================= */
+    .tag-input-box {
+        background: var(--bg-color);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 8px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 5px;
+        cursor: text;
+    }
+    .tag-input-box:focus-within {
+        border-color: var(--primary);
+    }
+    .tag-input-box input {
+        flex-grow: 1;
+        border: none;
+        outline: none;
+        padding: 0; /* Remove default padding */
+        background: transparent;
+        min-width: 120px;
+        width: auto; /* Allow it to shrink */
+        box-sizing: content-box; /* Fix padding issue */
+    }
+    /* ======================= MODIFICATION END ======================= */
 
 
     /* Admin */
@@ -455,7 +481,7 @@
     </div>
 </div>
 
-<!-- Upload Modal with Progress Bar -->
+<!-- Upload Modal -->
 <div id="uploadModal" class="modal hidden">
     <div class="modal-content">
         <span class="close-modal" onclick="closeModal('uploadModal')">&times;</span>
@@ -510,10 +536,15 @@
                 <label>Description *</label>
                 <textarea id="uDesc" rows="3" required></textarea>
             </div>
+
+            <!-- ======================= MODIFICATION START: New Tag Input HTML for Upload Form ======================= -->
             <div class="form-group">
-                <label>Tags (Comma separated) *</label>
-                <input type="text" id="uTags" placeholder="Action, RPG, Calculator..." required>
+                <label>Tags (Type a tag and press Enter) *</label>
+                <div id="uTagsContainer" class="tag-input-box">
+                    <input type="text" id="uTagsInput" placeholder="e.g., Action, RPG, Fun...">
+                </div>
             </div>
+            <!-- ======================= MODIFICATION END ======================= -->
             
             <div class="form-group">
                 <label>App Logo URL (Square) *</label>
@@ -531,15 +562,13 @@
                 <button type="button" class="btn btn-secondary" onclick="addScreenshotField()" style="font-size:0.8rem; margin-top:5px;">+ Add Screenshot URL</button>
             </div>
             
-            <!-- ======================= MODIFICATION START: APK File Input changed to URL Input ======================= -->
             <div class="form-group">
                 <label>APK File URL *</label>
                 <input type="text" id="uApkUrl" placeholder="Paste direct download link for the APK" required>
                 <small style="color:gray; font-size:0.8rem; margin-top:4px; display:block;">
-                    Ensure it's a direct download link, not a preview page (e.g., for Google Drive, use a direct link generator).
+                    Ensure it's a direct download link, not a preview page.
                 </small>
             </div>
-            <!-- ======================= MODIFICATION END ======================= -->
 
             <button type="submit" class="btn btn-primary" id="uploadBtn" style="width:100%;">Proceed to Payment</button>
         </form>
@@ -652,6 +681,9 @@ let currentUser = null;
 let currentCategory = 'All';
 let tempAppData = {}; 
 let activeSearchTags = [];
+// ======================= MODIFICATION START: State for new tag input =======================
+let uploadFormTags = [];
+// ======================= MODIFICATION END =======================
 
 
 // =======================================================
@@ -762,12 +794,16 @@ const saveUserUpi = async () => {
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
     addScreenshotField(); 
+    // Setup listeners
     document.addEventListener('click', (event) => {
         const searchContainer = document.querySelector('.search-container');
         if (!searchContainer.contains(event.target)) {
             document.getElementById('suggestionsDropdown').classList.add('hidden');
         }
     });
+    // ======================= MODIFICATION START: Setup listener for new tag input =======================
+    setupUploadTagsInput();
+    // ======================= MODIFICATION END =======================
 });
 
 const loadAppsFromDB = () => {
@@ -810,13 +846,20 @@ const formatSize = (bytes) => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
+// ======================= MODIFICATION START: Clear tag array when modal opens =======================
 const openUploadModal = () => {
     document.getElementById('uploadForm').reset();
     document.getElementById('screenshotInputs').innerHTML = '';
     addScreenshotField();
     document.getElementById('logoPreview').style.display = 'none';
+    
+    // Clear the tags from the previous session
+    uploadFormTags = [];
+    renderUploadTags(); // Update the UI to show no tags
+
     document.getElementById('uploadModal').classList.remove('hidden');
 };
+// ======================= MODIFICATION END =======================
 
 const closeModal = (id) => {
     document.getElementById(id).classList.add('hidden');
@@ -861,7 +904,7 @@ const togglePremiumInput = () => {
     document.getElementById('freeInfoDiv').classList.toggle('hidden', isPrem);
 };
 
-// ======================= MODIFICATION START: Upload handler now uses APK URL =======================
+// ======================= MODIFICATION START: Use tag array on submit =======================
 const handleUploadStep1 = async (e) => {
     e.preventDefault();
     const btn = document.getElementById('uploadBtn');
@@ -875,9 +918,9 @@ const handleUploadStep1 = async (e) => {
     const cat = document.getElementById('uCat').value;
     const ver = document.getElementById('uVer').value;
     const desc = document.getElementById('uDesc').value;
-    const tags = document.getElementById('uTags').value.split(',').map(t => t.trim()).filter(Boolean);
+    const tags = uploadFormTags; // Use the array directly
     const logoUrl = document.getElementById('uLogoUrl').value;
-    const apkUrl = document.getElementById('uApkUrl').value.trim(); // Get APK URL from text input
+    const apkUrl = document.getElementById('uApkUrl').value.trim();
     
     const screenshots = Array.from(document.querySelectorAll('.ss-url-input')).map(input => input.value.trim()).filter(Boolean);
 
@@ -885,28 +928,29 @@ const handleUploadStep1 = async (e) => {
     const appPrice = isPremium ? document.getElementById('uPrice').value : 'Free';
     const listingFee = isPremium ? 100 : 10;
 
-    // Validate the APK URL input
     if (!apkUrl) {
         alert("Please provide a direct URL for the APK file.");
         btn.innerText = "Proceed to Payment";
         btn.disabled = false;
         return;
     }
+    
+    if (tags.length === 0) {
+        alert("Please add at least one tag.");
+        btn.innerText = "Proceed to Payment";
+        btn.disabled = false;
+        return;
+    }
 
     try {
-        // No file upload needed, just prepare data
         tempAppData = {
             name, developer: dev, email, category: cat, version: ver, description: desc, tags,
-            logo: logoUrl, 
-            screenshots, 
-            apkUrl: apkUrl, // Use the URL directly from the input
-            fileSize: null, // File size is unknown when using a link
+            logo: logoUrl, screenshots, apkUrl, fileSize: null,
             isPremium, appPrice, listingFee,
             downloads: 0, status: 'pending', featured: false, ratings: [],
             uploaderUid: currentUser.uid, date: new Date().toISOString()
         };
 
-        // Proceed to payment
         const upiLink = `upi://pay?pa=${ADMIN_UPI}&pn=AppPlusAdmin&am=${listingFee}&cu=INR&tn=AppListingFee`;
         
         document.getElementById('upiPayBtn').href = upiLink;
@@ -1048,6 +1092,10 @@ const filterCategory = (cat) => {
     renderHome();
 };
 
+
+// =======================================================
+// 5. ADVANCED SEARCH & TAGS LOGIC
+// =======================================================
 const handleSearchInput = (event) => {
     const input = event.target;
     const value = input.value.trim();
@@ -1137,8 +1185,59 @@ const hideSuggestions = () => {
     document.getElementById('suggestionsDropdown').classList.add('hidden');
 };
 
+// ======================= MODIFICATION START: New functions for upload form tags =======================
+const setupUploadTagsInput = () => {
+    const input = document.getElementById('uTagsInput');
+    const container = document.getElementById('uTagsContainer');
 
-// ======================= MODIFICATION START: openDetail handles missing fileSize =======================
+    // Add a keydown listener to the input field
+    input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault(); // Prevents the form from submitting
+            const value = input.value.trim();
+            if (value) {
+                if (!uploadFormTags.includes(value)) {
+                    uploadFormTags.push(value);
+                    renderUploadTags();
+                }
+                input.value = '';
+            }
+        }
+    });
+
+    // When the container is clicked, focus the input field
+    container.addEventListener('click', () => {
+        input.focus();
+    });
+};
+
+const renderUploadTags = () => {
+    const container = document.getElementById('uTagsContainer');
+    const input = document.getElementById('uTagsInput');
+    
+    // Clear all existing tags but not the input field itself
+    container.querySelectorAll('.tag-item').forEach(tagEl => tagEl.remove());
+
+    // Re-render all tags from the array
+    uploadFormTags.forEach(tag => {
+        const tagEl = document.createElement('div');
+        tagEl.className = 'tag-item';
+        tagEl.innerHTML = `
+            <span>${tag}</span>
+            <span class="remove-tag" onclick="removeUploadTag('${tag}')">&times;</span>
+        `;
+        // Insert the tag element before the input field
+        container.insertBefore(tagEl, input);
+    });
+};
+
+const removeUploadTag = (tagText) => {
+    uploadFormTags = uploadFormTags.filter(t => t !== tagText);
+    renderUploadTags();
+};
+// ======================= MODIFICATION END =======================
+
+
 const openDetail = (id) => {
     const app = apps.find(a => a.id === id);
     if(!app) return;
@@ -1151,7 +1250,6 @@ const openDetail = (id) => {
 
     const isOwner = currentUser && currentUser.uid === app.uploaderUid;
     let actionButton = '';
-
     const downloadButtonText = app.fileSize ? `Download Now (${formatSize(app.fileSize)})` : 'Download Now';
 
     if (isOwner) {
@@ -1219,7 +1317,6 @@ const openDetail = (id) => {
     `;
     modal.classList.remove('hidden');
 };
-// ======================= MODIFICATION END =======================
 
 const initiatePurchase = async (appId) => {
     const app = apps.find(a => a.id === appId);
@@ -1260,7 +1357,6 @@ const startDownloadProcess = (id) => {
                 downloads: firebase.firestore.FieldValue.increment(1)
             });
 
-            // This now opens the user-provided link
             window.open(app.apkUrl, "_blank");
 
             if(btn) {
@@ -1298,7 +1394,7 @@ const submitReview = async (id) => {
 };
 
 // =======================================================
-// 5. ADMIN LOGIC
+// 6. ADMIN LOGIC
 // =======================================================
 const openAdminPrompt = () => {
     document.getElementById('adminLoginModal').classList.remove('hidden');
@@ -1409,4 +1505,4 @@ const deleteApp = async (id) => {
 
 </script>
 </body>
-</html>
+    </html>
