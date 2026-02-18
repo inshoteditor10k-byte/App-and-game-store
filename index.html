@@ -195,7 +195,7 @@
     @keyframes slideUp { from { transform: translateY(50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
     .close-modal { position: absolute; top: 15px; right: 20px; font-size: 24px; cursor: pointer; }
 
-    /* PROGRESS BAR STYLES (NEW) */
+    /* PROGRESS BAR STYLES */
     .progress-container {
         width: 100%;
         background-color: #e0e0e0;
@@ -226,6 +226,13 @@
     }
     .screenshot-container { display: flex; gap: 10px; overflow-x: auto; padding: 10px 0; }
     .screenshot-preview { height: 100px; border-radius: 8px; }
+
+    /* --- NEW STYLES FOR URL INPUTS --- */
+    .url-input-group { display: flex; gap: 5px; align-items: center; }
+    .url-input-group input { flex-grow: 1; }
+    .screenshot-url-group { margin-top: 10px; }
+    .screenshot-url-preview { display: none; height: 100px; border-radius: 8px; margin-top: 5px; }
+
 
     /* Admin */
     .admin-dashboard { padding: 20px 5%; }
@@ -448,20 +455,26 @@
                 <label>Tags (Comma separated) *</label>
                 <input type="text" id="uTags" placeholder="Action, RPG, Calculator..." required>
             </div>
+            <!-- ======================= MODIFICATION START ======================= -->
             <div class="form-group">
-                <label>App Logo (Square) *</label>
-                <input type="file" id="uLogo" accept="image/*" required>
-            </div>
-            <div class="form-group">
-                <label>Screenshots</label>
-                <div id="screenshotInputs">
-                    <input type="file" class="ss-input" accept="image/*" style="margin-bottom:5px;">
+                <label>App Logo URL (Square) *</label>
+                <div class="url-input-group">
+                    <input type="text" id="uLogoUrl" placeholder="Paste direct image URL (e.g., .png, .jpg)" required>
+                    <button type="button" class="btn btn-secondary" style="font-size:0.8rem;" onclick="previewImage(this.previousElementSibling, document.getElementById('logoPreview'))">Preview</button>
                 </div>
-                <button type="button" class="btn btn-secondary" onclick="addScreenshotField()" style="font-size:0.8rem; margin-top:5px;">+ Add More</button>
+                <img id="logoPreview" src="" alt="Logo Preview" style="display:none; max-width: 80px; margin-top: 10px; border-radius:15px;">
             </div>
+            <div class="form-group">
+                <label>Screenshot URLs</label>
+                <div id="screenshotInputs">
+                     <!-- JS will add more fields here -->
+                </div>
+                <button type="button" class="btn btn-secondary" onclick="addScreenshotField()" style="font-size:0.8rem; margin-top:5px;">+ Add Screenshot URL</button>
+            </div>
+            <!-- ======================= MODIFICATION END ======================= -->
             <div class="form-group">
                 <label>APK File *</label>
-                <input type="file" id="uApk" required>
+                <input type="file" id="uApk" accept=".apk" required>
             </div>
             
             <!-- PROGRESS BAR UI -->
@@ -592,7 +605,6 @@ auth.onAuthStateChanged(async (user) => {
         document.getElementById('authScreen').classList.add('hidden');
         document.getElementById('mainInterface').classList.remove('hidden');
         
-        // Update header avatar safely
         if(document.getElementById('headerAvatar')) {
             document.getElementById('headerAvatar').src = user.photoURL || 'https://via.placeholder.com/40';
         }
@@ -609,7 +621,6 @@ auth.onAuthStateChanged(async (user) => {
             });
         }
         
-        // Pre-fill upload form if elements exist
         if(document.getElementById('uDev')) document.getElementById('uDev').value = user.displayName || user.email.split('@')[0];
         if(document.getElementById('uEmail')) document.getElementById('uEmail').value = user.email;
 
@@ -646,7 +657,6 @@ const googleLogin = () => {
     auth.signInWithPopup(provider).catch(e => alert(e.message));
 };
 
-// LOGOUT FUNCTION
 const logout = () => {
     closeModal('profileModal');
     auth.signOut().then(() => {
@@ -654,21 +664,15 @@ const logout = () => {
     }).catch(e => alert(e.message));
 };
 
-// FIXED PROFILE MODAL
 const openProfileModal = async () => {
     if(!currentUser) {
         alert("Please login first.");
         return;
     }
-
-    // Show visual feedback immediately so user knows it's working
     document.body.style.cursor = 'wait';
-    alert("Loading profile data..."); 
-
     try {
         const userRef = await db.collection('users').doc(currentUser.uid).get();
         const data = userRef.data();
-
         const myApps = apps.filter(a => a.uploaderUid === currentUser.uid);
 
         document.getElementById('pAvatar').src = currentUser.photoURL || 'https://via.placeholder.com/100';
@@ -699,6 +703,7 @@ const saveUserUpi = async () => {
 // =======================================================
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
+    addScreenshotField(); // Add the first screenshot field on load
 });
 
 const loadAppsFromDB = () => {
@@ -742,8 +747,10 @@ const formatSize = (bytes) => {
 };
 
 const openUploadModal = () => {
-    // Reset form and progress
     document.getElementById('uploadForm').reset();
+    document.getElementById('screenshotInputs').innerHTML = ''; // Clear existing fields
+    addScreenshotField(); // Add one field back
+    document.getElementById('logoPreview').style.display = 'none';
     document.getElementById('uploadProgressContainer').classList.add('hidden');
     document.getElementById('uploadProgressBar').style.width = '0%';
     document.getElementById('uploadProgressBar').innerText = '0%';
@@ -754,15 +761,39 @@ const closeModal = (id) => {
     document.getElementById(id).classList.add('hidden');
 };
 
-const addScreenshotField = () => {
-    const div = document.createElement('input');
-    div.type = 'file';
-    div.className = 'ss-input';
-    div.accept = 'image/*';
-    div.style.marginBottom = '5px';
-    div.style.display = 'block';
-    document.getElementById('screenshotInputs').appendChild(div);
+// ======================= MODIFICATION START: URL-based image functions =======================
+const previewImage = (inputElement, imageElement) => {
+    const url = inputElement.value;
+    if (url) {
+        imageElement.src = url;
+        imageElement.style.display = 'block';
+        imageElement.onerror = () => {
+            alert('Invalid image URL or image cannot be loaded.');
+            imageElement.style.display = 'none';
+        };
+    } else {
+        imageElement.style.display = 'none';
+    }
 };
+
+const addScreenshotField = () => {
+    const container = document.getElementById('screenshotInputs');
+    const newField = document.createElement('div');
+    newField.className = 'screenshot-url-group';
+    
+    // The HTML for a new URL input field with its preview button and image tag
+    newField.innerHTML = `
+        <div class="url-input-group">
+            <input type="text" class="ss-url-input" placeholder="Paste screenshot URL...">
+            <button type="button" class="btn btn-secondary" style="font-size:0.8rem;" onclick="previewImage(this.previousElementSibling, this.nextElementSibling.nextElementSibling)">Preview</button>
+            <button type="button" class="btn btn-danger" style="padding: 5px 10px;" onclick="this.parentElement.parentElement.remove()">X</button>
+        </div>
+        <img class="screenshot-url-preview" src="" alt="Screenshot Preview">
+    `;
+    container.appendChild(newField);
+};
+// ======================= MODIFICATION END =======================
+
 
 const togglePremiumInput = () => {
     const isPrem = document.getElementById('uIsPremium').checked;
@@ -776,10 +807,8 @@ const togglePremiumInput = () => {
 };
 
 // =======================================================
-// 3. OPTIMIZED UPLOAD LOGIC WITH VISUAL PROGRESS BAR
+// 3. UPLOAD LOGIC (MODIFIED FOR URLS)
 // =======================================================
-
-// Helper to handle individual file uploads with progress monitoring
 const uploadFileWithProgress = (file, path, onProgress) => {
     return new Promise((resolve, reject) => {
         const ref = storage.ref(path);
@@ -787,8 +816,8 @@ const uploadFileWithProgress = (file, path, onProgress) => {
 
         task.on('state_changed', 
             (snapshot) => {
-                const transferred = snapshot.bytesTransferred;
-                onProgress(file.name, transferred); // Report back to main tracker
+                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                onProgress(progress);
             },
             (error) => reject(error),
             async () => {
@@ -799,8 +828,7 @@ const uploadFileWithProgress = (file, path, onProgress) => {
     });
 };
 
-// ======================= MODIFICATION START =======================
-// This function is modified for better user feedback during upload.
+// ======================= MODIFICATION START: Main upload handler =======================
 const handleUploadStep1 = async (e) => {
     e.preventDefault();
     const btn = document.getElementById('uploadBtn');
@@ -813,6 +841,7 @@ const handleUploadStep1 = async (e) => {
     const progressText = document.getElementById('uploadProgressText');
     progressContainer.classList.remove('hidden');
 
+    // Get form data (text and URLs)
     const name = document.getElementById('uName').value;
     const dev = document.getElementById('uDev').value;
     const email = document.getElementById('uEmail').value;
@@ -820,83 +849,53 @@ const handleUploadStep1 = async (e) => {
     const ver = document.getElementById('uVer').value;
     const desc = document.getElementById('uDesc').value;
     const tags = document.getElementById('uTags').value.split(',').map(t => t.trim());
+    const logoUrl = document.getElementById('uLogoUrl').value;
     
+    const screenshots = [];
+    document.querySelectorAll('.ss-url-input').forEach(input => {
+        if(input.value.trim()) {
+            screenshots.push(input.value.trim());
+        }
+    });
+
     const isPremium = document.getElementById('uIsPremium').checked;
     const appPrice = isPremium ? document.getElementById('uPrice').value : 'Free';
     const listingFee = isPremium ? 100 : 10;
 
-    const logoFile = document.getElementById('uLogo').files[0];
+    // Get the only file to be uploaded: the APK
     const apkFile = document.getElementById('uApk').files[0];
-    const ssInputs = document.querySelectorAll('.ss-input');
-    
-    // Calculate Total Size for Progress
-    let totalBytesExpected = logoFile.size + apkFile.size;
-    
-    // Fix for "Add More" click but no file selected
-    const validSsFiles = [];
-    ssInputs.forEach(input => {
-        if(input.files && input.files[0]) {
-            validSsFiles.push(input.files[0]);
-            totalBytesExpected += input.files[0].size;
-        }
-    });
+    if (!apkFile) {
+        alert("Please select an APK file.");
+        btn.innerText = "Proceed to Payment";
+        btn.disabled = false;
+        return;
+    }
 
-    // Tracking variables
-    let progressMap = {};
-    progressMap[logoFile.name] = 0;
-    progressMap[apkFile.name] = 0;
-    validSsFiles.forEach(f => progressMap[f.name] = 0);
-    
-    // Improved feedback text
-    let currentUploadingFile = apkFile.name; // Assume APK is the largest
-
-    const updateGlobalProgress = (fileName, bytesTransferred) => {
-        progressMap[fileName] = bytesTransferred;
-        
-        let totalTransferred = 0;
-        for (let key in progressMap) {
-            totalTransferred += progressMap[key];
-        }
-
-        const percentage = Math.min(100, Math.round((totalTransferred / totalBytesExpected) * 100));
-        progressBar.style.width = percentage + '%';
-        progressBar.innerText = percentage + '%';
-        
-        // **IMPROVED FEEDBACK LOGIC**
-        // Show progress of the largest file (APK) for better user perception
-        const apkProgress = (progressMap[apkFile.name] / apkFile.size * 100).toFixed(0);
-        if (apkProgress < 100) {
-            progressText.innerText = `Uploading APK: ${apkProgress}% ... Please wait.`;
-        } else {
-            progressText.innerText = `Finalizing... ${percentage}%`;
-        }
+    // Progress update function for the APK upload
+    const updateApkProgress = (percentage) => {
+        const p = Math.round(percentage);
+        progressBar.style.width = p + '%';
+        progressBar.innerText = p + '%';
+        progressText.innerText = `Uploading APK: ${p}%... Please wait.`;
     };
 
     try {
         const ts = Date.now();
-        progressText.innerText = "Starting upload... Please wait.";
+        progressText.innerText = "Starting APK upload... Please wait.";
         
-        // 1. Prepare Promises with Progress Callbacks
-        // We start ALL uploads at the exact same time (Parallel)
-        const logoPromise = uploadFileWithProgress(logoFile, `logos/${ts}_${logoFile.name}`, updateGlobalProgress);
-        const apkPromise = uploadFileWithProgress(apkFile, `apks/${ts}_${apkFile.name}`, updateGlobalProgress);
-        const ssPromises = validSsFiles.map(file => 
-            uploadFileWithProgress(file, `screens/${ts}_${file.name}`, updateGlobalProgress)
-        );
-
-        // 2. Execute Parallel Uploads and Wait for All
-        const [logoUrl, apkUrl] = await Promise.all([logoPromise, apkPromise]);
-        const screenshots = await Promise.all(ssPromises);
+        // --- UPLOAD ONLY THE APK ---
+        const apkUrl = await uploadFileWithProgress(apkFile, `apks/${ts}_${apkFile.name}`, updateApkProgress);
 
         // Upload Complete
         progressBar.style.background = '#2ed573'; // Turn green
         progressText.innerText = "Upload Complete! Preparing Payment...";
 
+        // Store all data, including the image URLs and the new APK url
         tempAppData = {
             name, developer: dev, email, category: cat, version: ver, description: desc, tags,
-            logo: logoUrl,
-            screenshots,
-            apkUrl: apkUrl,
+            logo: logoUrl, // Direct URL from input
+            screenshots, // Array of URLs from inputs
+            apkUrl: apkUrl, // URL from storage after upload
             fileSize: apkFile.size,
             isPremium: isPremium,
             appPrice: appPrice,
@@ -918,7 +917,6 @@ const handleUploadStep1 = async (e) => {
         
         document.getElementById('payTitle').innerText = "Pay Listing Fee";
         document.getElementById('payReceiverInfo').innerText = "Fee goes to Admin";
-        
         document.getElementById('payContext').value = 'upload';
 
         setTimeout(() => {
@@ -927,7 +925,7 @@ const handleUploadStep1 = async (e) => {
         }, 1000); // Small delay to show 100%
 
     } catch (err) {
-        alert('Error uploading files. Check internet connection.');
+        alert('Error uploading APK file. Check internet connection.');
         console.error(err);
         progressBar.style.background = 'red';
         progressText.innerText = "Upload Failed.";
@@ -938,8 +936,9 @@ const handleUploadStep1 = async (e) => {
 };
 // ======================= MODIFICATION END =======================
 
+
 // =======================================================
-// 4. TRANSACTION HANDLER
+// 4. TRANSACTION & APP DISPLAY LOGIC (UNCHANGED)
 // =======================================================
 const finalizeTransaction = async (e) => {
     e.preventDefault();
@@ -1028,7 +1027,7 @@ const createAppCard = (app, isHighlight = false) => {
     const avgRating = ratingList.length ? (ratingList.reduce((a,b)=>a+b.stars,0)/ratingList.length).toFixed(1) : 'New';
 
     div.innerHTML = `
-        <img src="${app.logo}" class="app-logo" alt="logo">
+        <img src="${app.logo}" class="app-logo" alt="logo" onerror="this.src='https://via.placeholder.com/80'">
         <div class="app-details">
             <h3 class="app-name">${app.name}</h3>
             <p class="app-dev">by ${app.developer}</p>
@@ -1077,7 +1076,7 @@ const openDetail = (id) => {
         actionButton = `<button class="btn btn-primary download-btn" id="dlBtn" onclick="startDownloadProcess('${app.id}')">Download Now (${formatSize(app.fileSize)})</button>`;
     }
 
-    const screenshotsHtml = app.screenshots ? app.screenshots.map(s => `<img src="${s}" class="screenshot-preview">`).join('') : '';
+    const screenshotsHtml = app.screenshots ? app.screenshots.map(s => `<img src="${s}" class="screenshot-preview" onerror="this.style.display='none'">`).join('') : '';
     const reviewsHtml = ratingList.map(r => `
         <div class="review-item">
             <div style="display:flex; justify-content:space-between;">
@@ -1091,7 +1090,7 @@ const openDetail = (id) => {
     content.innerHTML = `
         <span class="close-modal" onclick="closeModal('detailModal')">&times;</span>
         <div class="detail-header">
-            <img src="${app.logo}" class="detail-logo">
+            <img src="${app.logo}" class="detail-logo" onerror="this.src='https://via.placeholder.com/120'">
             <div>
                 <h1>${app.name}</h1>
                 <p style="color:var(--primary); font-weight:bold;">${app.developer}</p>
