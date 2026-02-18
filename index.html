@@ -119,21 +119,96 @@
     }
     .logo { font-size: 1.5rem; font-weight: bold; color: var(--primary); display: flex; align-items: center; gap: 10px; }
     .logo span { color: var(--accent); }
-    .search-bar {
+    
+    /* ======================= MODIFICATION START: Advanced Search Styles ======================= */
+    .search-container {
         flex-grow: 1;
         max-width: 500px;
         margin: 0 20px;
         position: relative;
     }
-    .search-bar input {
-        width: 100%;
-        padding: 12px 20px;
-        border-radius: 50px;
-        border: 1px solid var(--border-color);
+    .search-bar {
+        position: relative;
         background: var(--bg-color);
-        color: var(--text-color);
-        outline: none;
+        border: 1px solid var(--border-color);
+        border-radius: 50px;
+        padding: 5px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
     }
+    .search-bar:focus-within {
+        border-color: var(--primary);
+        box-shadow: 0 0 5px rgba(255, 153, 51, 0.5);
+    }
+    #tagContainer {
+        display: flex;
+        gap: 5px;
+        flex-wrap: wrap;
+    }
+    .tag-item {
+        background: var(--primary);
+        color: white;
+        padding: 5px 10px;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+    }
+    .remove-tag {
+        cursor: pointer;
+        font-weight: bold;
+        background: rgba(255,255,255,0.2);
+        border-radius: 50%;
+        width: 16px;
+        height: 16px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        line-height: 16px;
+    }
+    #searchInput {
+        flex-grow: 1;
+        border: none;
+        outline: none;
+        padding: 8px 15px;
+        background: transparent;
+        color: var(--text-color);
+        min-width: 150px; /* Ensures input is usable when tags fill space */
+    }
+    #suggestionsDropdown {
+        position: absolute;
+        top: 110%; /* Position below the search bar */
+        left: 0;
+        width: 100%;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        max-height: 300px;
+        overflow-y: auto;
+        z-index: 101;
+    }
+    .suggestion-item {
+        padding: 12px 15px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .suggestion-item:hover {
+        background-color: var(--bg-color);
+    }
+    .suggestion-item img {
+        width: 30px;
+        height: 30px;
+        border-radius: 6px;
+    }
+    /* ======================= MODIFICATION END ======================= */
+
 
     /* Hero */
     .section-title { margin: 2rem 5% 1rem; font-size: 1.8rem; border-left: 5px solid var(--primary); padding-left: 15px; }
@@ -319,9 +394,17 @@
             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zm0 9l2.5-1.25L12 8.5l-2.5 1.25L12 11zm0 2.5l-5-2.5-5 2.5L12 22l10-8.5-5-2.5-5 2.5z"/></svg>
             AppPlus <span>Store</span>
         </div>
-        <div class="search-bar">
-            <input type="text" id="searchInput" placeholder="Search by tags (e.g., Action, Tool, AI)..." onkeyup="handleSearch()">
+        
+        <!-- ======================= MODIFICATION START: Advanced Search HTML Structure ======================= -->
+        <div class="search-container">
+            <div class="search-bar">
+                <div id="tagContainer"></div>
+                <input type="text" id="searchInput" placeholder="Search for apps & games..." onkeyup="handleSearchInput(event)">
+            </div>
+            <div id="suggestionsDropdown" class="hidden"></div>
         </div>
+        <!-- ======================= MODIFICATION END ======================= -->
+
         <div style="display:flex; gap:10px; align-items:center;">
             <button class="btn btn-secondary" onclick="toggleTheme()" id="themeBtn">🌙</button>
             <button class="btn btn-primary" onclick="openUploadModal()">Submit App</button>
@@ -455,7 +538,7 @@
                 <label>Tags (Comma separated) *</label>
                 <input type="text" id="uTags" placeholder="Action, RPG, Calculator..." required>
             </div>
-            <!-- ======================= MODIFICATION START ======================= -->
+            
             <div class="form-group">
                 <label>App Logo URL (Square) *</label>
                 <div class="url-input-group">
@@ -471,7 +554,7 @@
                 </div>
                 <button type="button" class="btn btn-secondary" onclick="addScreenshotField()" style="font-size:0.8rem; margin-top:5px;">+ Add Screenshot URL</button>
             </div>
-            <!-- ======================= MODIFICATION END ======================= -->
+            
             <div class="form-group">
                 <label>APK File *</label>
                 <input type="file" id="uApk" accept=".apk" required>
@@ -595,6 +678,10 @@ let apps = [];
 let currentUser = null;
 let currentCategory = 'All';
 let tempAppData = {}; 
+// ======================= MODIFICATION START: New state for search =======================
+let activeSearchTags = [];
+// ======================= MODIFICATION END =======================
+
 
 // =======================================================
 // 1. AUTHENTICATION & PROFILE LOGIC
@@ -703,7 +790,14 @@ const saveUserUpi = async () => {
 // =======================================================
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
-    addScreenshotField(); // Add the first screenshot field on load
+    addScreenshotField(); 
+    // Add a listener to hide suggestions when clicking outside
+    document.addEventListener('click', (event) => {
+        const searchContainer = document.querySelector('.search-container');
+        if (!searchContainer.contains(event.target)) {
+            document.getElementById('suggestionsDropdown').classList.add('hidden');
+        }
+    });
 });
 
 const loadAppsFromDB = () => {
@@ -739,7 +833,7 @@ const toggleTheme = () => {
 };
 
 const formatSize = (bytes) => {
-    if(bytes === 0) return '0 B';
+    if(!bytes) return '0 B';
     const k = 1024;
     const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -748,8 +842,8 @@ const formatSize = (bytes) => {
 
 const openUploadModal = () => {
     document.getElementById('uploadForm').reset();
-    document.getElementById('screenshotInputs').innerHTML = ''; // Clear existing fields
-    addScreenshotField(); // Add one field back
+    document.getElementById('screenshotInputs').innerHTML = '';
+    addScreenshotField();
     document.getElementById('logoPreview').style.display = 'none';
     document.getElementById('uploadProgressContainer').classList.add('hidden');
     document.getElementById('uploadProgressBar').style.width = '0%';
@@ -761,7 +855,9 @@ const closeModal = (id) => {
     document.getElementById(id).classList.add('hidden');
 };
 
-// ======================= MODIFICATION START: URL-based image functions =======================
+// =======================================================
+// 3. UPLOAD AND IMAGE URL LOGIC
+// =======================================================
 const previewImage = (inputElement, imageElement) => {
     const url = inputElement.value;
     if (url) {
@@ -781,7 +877,6 @@ const addScreenshotField = () => {
     const newField = document.createElement('div');
     newField.className = 'screenshot-url-group';
     
-    // The HTML for a new URL input field with its preview button and image tag
     newField.innerHTML = `
         <div class="url-input-group">
             <input type="text" class="ss-url-input" placeholder="Paste screenshot URL...">
@@ -792,23 +887,13 @@ const addScreenshotField = () => {
     `;
     container.appendChild(newField);
 };
-// ======================= MODIFICATION END =======================
-
 
 const togglePremiumInput = () => {
     const isPrem = document.getElementById('uIsPremium').checked;
-    if(isPrem) {
-        document.getElementById('priceInputDiv').classList.remove('hidden');
-        document.getElementById('freeInfoDiv').classList.add('hidden');
-    } else {
-        document.getElementById('priceInputDiv').classList.add('hidden');
-        document.getElementById('freeInfoDiv').classList.remove('hidden');
-    }
+    document.getElementById('priceInputDiv').classList.toggle('hidden', !isPrem);
+    document.getElementById('freeInfoDiv').classList.toggle('hidden', isPrem);
 };
 
-// =======================================================
-// 3. UPLOAD LOGIC (MODIFIED FOR URLS)
-// =======================================================
 const uploadFileWithProgress = (file, path, onProgress) => {
     return new Promise((resolve, reject) => {
         const ref = storage.ref(path);
@@ -828,20 +913,16 @@ const uploadFileWithProgress = (file, path, onProgress) => {
     });
 };
 
-// ======================= MODIFICATION START: Main upload handler =======================
 const handleUploadStep1 = async (e) => {
     e.preventDefault();
     const btn = document.getElementById('uploadBtn');
-    
-    // UI Setup
-    btn.innerText = "Processing (Do not close)...";
+    btn.innerText = "Processing...";
     btn.disabled = true;
     const progressContainer = document.getElementById('uploadProgressContainer');
     const progressBar = document.getElementById('uploadProgressBar');
     const progressText = document.getElementById('uploadProgressText');
     progressContainer.classList.remove('hidden');
 
-    // Get form data (text and URLs)
     const name = document.getElementById('uName').value;
     const dev = document.getElementById('uDev').value;
     const email = document.getElementById('uEmail').value;
@@ -851,18 +932,12 @@ const handleUploadStep1 = async (e) => {
     const tags = document.getElementById('uTags').value.split(',').map(t => t.trim());
     const logoUrl = document.getElementById('uLogoUrl').value;
     
-    const screenshots = [];
-    document.querySelectorAll('.ss-url-input').forEach(input => {
-        if(input.value.trim()) {
-            screenshots.push(input.value.trim());
-        }
-    });
+    const screenshots = Array.from(document.querySelectorAll('.ss-url-input')).map(input => input.value.trim()).filter(Boolean);
 
     const isPremium = document.getElementById('uIsPremium').checked;
     const appPrice = isPremium ? document.getElementById('uPrice').value : 'Free';
     const listingFee = isPremium ? 100 : 10;
 
-    // Get the only file to be uploaded: the APK
     const apkFile = document.getElementById('uApk').files[0];
     if (!apkFile) {
         alert("Please select an APK file.");
@@ -871,50 +946,32 @@ const handleUploadStep1 = async (e) => {
         return;
     }
 
-    // Progress update function for the APK upload
-    const updateApkProgress = (percentage) => {
-        const p = Math.round(percentage);
-        progressBar.style.width = p + '%';
-        progressBar.innerText = p + '%';
-        progressText.innerText = `Uploading APK: ${p}%... Please wait.`;
-    };
-
     try {
         const ts = Date.now();
-        progressText.innerText = "Starting APK upload... Please wait.";
+        progressText.innerText = "Starting APK upload...";
         
-        // --- UPLOAD ONLY THE APK ---
-        const apkUrl = await uploadFileWithProgress(apkFile, `apks/${ts}_${apkFile.name}`, updateApkProgress);
+        const apkUrl = await uploadFileWithProgress(apkFile, `apks/${ts}_${apkFile.name}`, (p) => {
+            const perc = Math.round(p);
+            progressBar.style.width = perc + '%';
+            progressBar.innerText = perc + '%';
+            progressText.innerText = `Uploading APK: ${perc}%...`;
+        });
 
-        // Upload Complete
-        progressBar.style.background = '#2ed573'; // Turn green
+        progressBar.style.background = '#2ed573';
         progressText.innerText = "Upload Complete! Preparing Payment...";
 
-        // Store all data, including the image URLs and the new APK url
         tempAppData = {
             name, developer: dev, email, category: cat, version: ver, description: desc, tags,
-            logo: logoUrl, // Direct URL from input
-            screenshots, // Array of URLs from inputs
-            apkUrl: apkUrl, // URL from storage after upload
-            fileSize: apkFile.size,
-            isPremium: isPremium,
-            appPrice: appPrice,
-            listingFee: listingFee,
-            downloads: 0,
-            status: 'pending', 
-            featured: false,
-            ratings: [],
-            uploaderUid: currentUser.uid, 
-            date: new Date().toISOString()
+            logo: logoUrl, screenshots, apkUrl, fileSize: apkFile.size,
+            isPremium, appPrice, listingFee,
+            downloads: 0, status: 'pending', featured: false, ratings: [],
+            uploaderUid: currentUser.uid, date: new Date().toISOString()
         };
 
-        // SETUP PAYMENT
         const upiLink = `upi://pay?pa=${ADMIN_UPI}&pn=AppPlusAdmin&am=${listingFee}&cu=INR&tn=AppListingFee`;
         
-        const payBtn = document.getElementById('upiPayBtn');
-        payBtn.href = upiLink;
-        payBtn.innerText = `Pay ₹${listingFee} to Admin`;
-        
+        document.getElementById('upiPayBtn').href = upiLink;
+        document.getElementById('upiPayBtn').innerText = `Pay ₹${listingFee} to Admin`;
         document.getElementById('payTitle').innerText = "Pay Listing Fee";
         document.getElementById('payReceiverInfo').innerText = "Fee goes to Admin";
         document.getElementById('payContext').value = 'upload';
@@ -922,10 +979,10 @@ const handleUploadStep1 = async (e) => {
         setTimeout(() => {
             closeModal('uploadModal');
             document.getElementById('paymentModal').classList.remove('hidden');
-        }, 1000); // Small delay to show 100%
+        }, 1000);
 
     } catch (err) {
-        alert('Error uploading APK file. Check internet connection.');
+        alert('Error uploading APK file.');
         console.error(err);
         progressBar.style.background = 'red';
         progressText.innerText = "Upload Failed.";
@@ -934,11 +991,9 @@ const handleUploadStep1 = async (e) => {
         btn.disabled = false;
     }
 };
-// ======================= MODIFICATION END =======================
-
 
 // =======================================================
-// 4. TRANSACTION & APP DISPLAY LOGIC (UNCHANGED)
+// 4. TRANSACTION & APP DISPLAY LOGIC
 // =======================================================
 const finalizeTransaction = async (e) => {
     e.preventDefault();
@@ -951,8 +1006,7 @@ const finalizeTransaction = async (e) => {
 
     if (context === 'upload') {
         tempAppData.paymentDetails = {
-            senderName: senderName,
-            senderUpi: senderUpi,
+            senderName, senderUpi,
             amountPaid: tempAppData.listingFee,
             type: 'listing_fee'
         };
@@ -993,26 +1047,35 @@ const renderHome = () => {
 
     const approvedApps = apps.filter(a => a.status === 'approved');
 
+    // Featured and Trending Section (unaffected by search)
     const trending = [...approvedApps].sort((a,b) => b.downloads - a.downloads).slice(0, 3);
     const featured = approvedApps.filter(a => a.featured);
-
     const displaySet = new Set([...trending, ...featured]);
     Array.from(displaySet).forEach(app => {
         featGrid.appendChild(createAppCard(app, true));
     });
+    if(displaySet.size === 0) featGrid.innerHTML = '<p style="padding:0 5%">No featured apps yet.</p>';
 
-    if(displaySet.size === 0) document.getElementById('featuredGrid').innerHTML = '<p style="padding:0 5%">No featured apps yet.</p>';
-
-    const searchQ = document.getElementById('searchInput').value.toLowerCase();
-    
+    // Main grid filtering
     const filtered = approvedApps.filter(app => {
-        const tagMatch = app.tags && app.tags.some(t => t.toLowerCase().includes(searchQ));
-        const catMatch = currentCategory === 'All' || app.category === currentCategory;
-        return tagMatch && catMatch;
+        const categoryMatch = currentCategory === 'All' || app.category === currentCategory;
+        if (!categoryMatch) return false;
+
+        if (activeSearchTags.length === 0) {
+            return true; // No tags, so show all in category
+        }
+
+        // App must match ALL active search tags
+        const appContent = [
+            app.name.toLowerCase(), 
+            ...(app.tags || []).map(t => t.toLowerCase())
+        ].join(' ');
+
+        return activeSearchTags.every(tag => appContent.includes(tag.toLowerCase()));
     });
 
     if (filtered.length === 0) {
-        grid.innerHTML = '<div style="grid-column: 1/-1; text-align:center;">No apps found.</div>';
+        grid.innerHTML = '<div style="grid-column: 1/-1; text-align:center;">No apps found. Try changing your search tags or filters.</div>';
     } else {
         filtered.forEach(app => grid.appendChild(createAppCard(app)));
     }
@@ -1051,9 +1114,99 @@ const filterCategory = (cat) => {
     renderHome();
 };
 
-const handleSearch = () => {
-    renderHome();
+
+// ======================= MODIFICATION START: New Advanced Search Functions =======================
+const handleSearchInput = (event) => {
+    const input = event.target;
+    const value = input.value.trim();
+
+    if (event.key === 'Enter' && value) {
+        addTag(value);
+        input.value = '';
+        hideSuggestions();
+    } else {
+        showSuggestions(value);
+    }
 };
+
+const addTag = (tagText) => {
+    const cleanTag = tagText.trim();
+    if (cleanTag && !activeSearchTags.includes(cleanTag)) {
+        activeSearchTags.push(cleanTag);
+        renderTags();
+        renderHome(); // Re-filter results
+    }
+    hideSuggestions();
+};
+
+const removeTag = (tagText) => {
+    activeSearchTags = activeSearchTags.filter(t => t !== tagText);
+    renderTags();
+    renderHome(); // Re-filter results
+};
+
+const editTag = (tagText) => {
+    removeTag(tagText);
+    const searchInput = document.getElementById('searchInput');
+    searchInput.value = tagText;
+    searchInput.focus();
+};
+
+const renderTags = () => {
+    const container = document.getElementById('tagContainer');
+    container.innerHTML = '';
+    activeSearchTags.forEach(tag => {
+        const tagEl = document.createElement('div');
+        tagEl.className = 'tag-item';
+        tagEl.innerHTML = `
+            <span onclick="editTag('${tag}')">${tag}</span>
+            <span class="remove-tag" onclick="removeTag('${tag}')">&times;</span>
+        `;
+        container.appendChild(tagEl);
+    });
+};
+
+const showSuggestions = (query) => {
+    const dropdown = document.getElementById('suggestionsDropdown');
+    if (!query) {
+        hideSuggestions();
+        return;
+    }
+
+    const lowerQuery = query.toLowerCase();
+    const suggestions = apps
+        .filter(app => app.status === 'approved' && (app.name.toLowerCase().includes(lowerQuery) || (app.tags || []).some(t => t.toLowerCase().includes(lowerQuery))))
+        .slice(0, 5); // Limit to 5 suggestions
+
+    if (suggestions.length === 0) {
+        hideSuggestions();
+        return;
+    }
+
+    dropdown.innerHTML = '';
+    suggestions.forEach(app => {
+        const item = document.createElement('div');
+        item.className = 'suggestion-item';
+        // When a suggestion is clicked, we add the APP NAME as a tag.
+        item.onclick = () => {
+            addTag(app.name);
+            document.getElementById('searchInput').value = '';
+        };
+        item.innerHTML = `
+            <img src="${app.logo}" alt="${app.name}" onerror="this.src='https://via.placeholder.com/30'">
+            <span>${app.name}</span>
+        `;
+        dropdown.appendChild(item);
+    });
+
+    dropdown.classList.remove('hidden');
+};
+
+const hideSuggestions = () => {
+    document.getElementById('suggestionsDropdown').classList.add('hidden');
+};
+// ======================= MODIFICATION END =======================
+
 
 const openDetail = (id) => {
     const app = apps.find(a => a.id === id);
@@ -1069,14 +1222,14 @@ const openDetail = (id) => {
     let actionButton = '';
 
     if (isOwner) {
-        actionButton = `<button class="btn btn-secondary download-btn">You Own This App</button>`;
+        actionButton = `<button class="btn btn-secondary download-btn" disabled>You Own This App</button>`;
     } else if (app.isPremium) {
         actionButton = `<button class="btn btn-primary download-btn" onclick="initiatePurchase('${app.id}')">Buy for ₹${app.appPrice}</button>`;
     } else {
         actionButton = `<button class="btn btn-primary download-btn" id="dlBtn" onclick="startDownloadProcess('${app.id}')">Download Now (${formatSize(app.fileSize)})</button>`;
     }
 
-    const screenshotsHtml = app.screenshots ? app.screenshots.map(s => `<img src="${s}" class="screenshot-preview" onerror="this.style.display='none'">`).join('') : '';
+    const screenshotsHtml = (app.screenshots || []).map(s => `<img src="${s}" class="screenshot-preview" onerror="this.style.display='none'">`).join('');
     const reviewsHtml = ratingList.map(r => `
         <div class="review-item">
             <div style="display:flex; justify-content:space-between;">
@@ -1085,7 +1238,7 @@ const openDetail = (id) => {
             </div>
             <p>${r.comment}</p>
         </div>
-    `).join('');
+    `).join('') || '<p>No reviews yet.</p>';
 
     content.innerHTML = `
         <span class="close-modal" onclick="closeModal('detailModal')">&times;</span>
@@ -1144,9 +1297,8 @@ const initiatePurchase = async (appId) => {
     }
 
     const upiLink = `upi://pay?pa=${devUPI}&pn=${devData.name}&am=${app.appPrice}&cu=INR&tn=BuyApp-${app.name}`;
-    const payBtn = document.getElementById('upiPayBtn');
-    payBtn.href = upiLink;
-    payBtn.innerText = `Pay ₹${app.appPrice} to Developer`;
+    document.getElementById('upiPayBtn').href = upiLink;
+    document.getElementById('upiPayBtn').innerText = `Pay ₹${app.appPrice} to Developer`;
     document.getElementById('payTitle').innerText = `Buy ${app.name}`;
     document.getElementById('payReceiverInfo').innerText = `Payment goes to: ${devData.name}`;
     document.getElementById('payContext').value = 'purchase';
@@ -1163,25 +1315,34 @@ const startDownloadProcess = (id) => {
     if(btn) {
         btn.innerHTML = "Downloading...";
         btn.classList.add('download-anim');
+        btn.disabled = true;
     }
 
     setTimeout(async () => {
-        const appRef = db.collection("apps").doc(id);
-        appRef.update({
-            downloads: firebase.firestore.FieldValue.increment(1)
-        });
+        try {
+            await db.collection("apps").doc(id).update({
+                downloads: firebase.firestore.FieldValue.increment(1)
+            });
 
-        const a = document.createElement('a');
-        a.href = app.apkUrl;
-        a.target = "_blank"; 
-        a.download = app.name + ".apk";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+            const a = document.createElement('a');
+            a.href = app.apkUrl;
+            a.target = "_blank"; 
+            a.download = app.name + ".apk";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
 
-        if(btn) {
-            btn.innerHTML = "Installed!";
-            btn.classList.remove('download-anim');
+            if(btn) {
+                btn.innerHTML = "Installed!";
+                btn.classList.remove('download-anim');
+            }
+        } catch(err) {
+            console.error("Download error:", err);
+            alert("Could not start download.");
+             if(btn) {
+                btn.innerHTML = `Download Now (${formatSize(app.fileSize)})`;
+                btn.disabled = false;
+            }
         }
     }, 1500);
 };
@@ -1191,20 +1352,29 @@ const submitReview = async (id) => {
     const comment = document.getElementById('rComment').value;
     if(!comment) return alert('Please write a comment');
 
-    const appRef = db.collection("apps").doc(id);
     const newRating = { stars, comment, date: new Date().toISOString() };
 
     try {
-        await appRef.update({
+        await db.collection("apps").doc(id).update({
             ratings: firebase.firestore.FieldValue.arrayUnion(newRating)
         });
         alert("Review Submitted");
-        openDetail(id);
+        // Re-open detail modal to show the new review instantly
+        const updatedAppDoc = await db.collection("apps").doc(id).get();
+        const updatedAppData = updatedAppDoc.data();
+        const appIndex = apps.findIndex(a => a.id === id);
+        if(appIndex > -1) {
+            apps[appIndex] = {...updatedAppData, id: id};
+        }
+        openDetail(id); 
     } catch(err) {
         console.error("Review Error", err);
     }
 };
 
+// =======================================================
+// 5. ADMIN LOGIC (UNCHANGED)
+// =======================================================
 const openAdminPrompt = () => {
     document.getElementById('adminLoginModal').classList.remove('hidden');
 };
@@ -1228,6 +1398,13 @@ const exitAdmin = () => {
 };
 
 const showAdminTab = (tab) => {
+    document.querySelectorAll('.admin-tabs .btn').forEach(b => {
+        b.classList.add('btn-secondary');
+        b.classList.remove('btn-primary');
+    });
+    event.target.classList.add('btn-primary');
+    event.target.classList.remove('btn-secondary');
+
     const container = document.getElementById('adminTabContent');
     let content = '';
 
@@ -1242,8 +1419,8 @@ const showAdminTab = (tab) => {
                     <tr>
                         <td><b>${a.name}</b><br>${a.isPremium ? 'Premium' : 'Free'}</td>
                         <td style="font-size:0.85rem;">
-                            Name: <b>${a.paymentDetails ? a.paymentDetails.senderName : 'N/A'}</b><br>
-                            UPI: <b>${a.paymentDetails ? a.paymentDetails.senderUpi : 'N/A'}</b>
+                            Name: <b>${a.paymentDetails?.senderName || 'N/A'}</b><br>
+                            UPI: <b>${a.paymentDetails?.senderUpi || 'N/A'}</b>
                         </td>
                         <td>
                             <button class="btn btn-success" onclick="updateStatus('${a.id}', 'approved')">Verify</button>
@@ -1262,17 +1439,22 @@ const showAdminTab = (tab) => {
                     <tr>
                         <td>${a.name}</td>
                         <td>${a.downloads}</td>
-                        <td><button onclick="toggleFeature('${a.id}', ${a.featured})">${a.featured ? 'Yes' : 'No'}</button></td>
-                        <td><button class="btn btn-danger" onclick="deleteApp('${a.id}')">Delete</button></td>
+                        <td>
+                            <button class="btn ${a.featured ? 'btn-success' : 'btn-secondary'}" style="padding: 5px 10px;" onclick="toggleFeature('${a.id}', ${a.featured})">
+                                ${a.featured ? 'Yes' : 'No'}
+                            </button>
+                        </td>
+                        <td><button class="btn btn-danger" style="padding: 5px 10px;" onclick="deleteApp('${a.id}')">Delete</button></td>
                     </tr>
                 `).join('')}
             </table>`;
     } else if (tab === 'analytics') {
-        const totalDL = apps.reduce((s, a) => s + a.downloads, 0);
+        const totalDL = apps.reduce((s, a) => s + (a.downloads || 0), 0);
         content = `<h3>Analytics</h3>
-            <div class="app-card">
-                <div><h2>${apps.length}</h2><p>Total Uploads</p></div>
-                <div><h2>${totalDL}</h2><p>Total Downloads</p></div>
+            <div class="flex" style="gap:20px;">
+                <div class="stat-box" style="flex:1;"><h2>${apps.length}</h2><p>Total Submissions</p></div>
+                <div class="stat-box" style="flex:1;"><h2>${apps.filter(a=>a.status==='approved').length}</h2><p>Approved Apps</p></div>
+                <div class="stat-box" style="flex:1;"><h2>${totalDL}</h2><p>Total Downloads</p></div>
             </div>`;
     }
     container.innerHTML = content;
@@ -1280,25 +1462,26 @@ const showAdminTab = (tab) => {
 
 const updateStatus = async (id, status) => {
     if(status === 'rejected') {
-        if(!confirm("Reject this app?")) return;
+        if(!confirm("Are you sure you want to REJECT and DELETE this app submission?")) return;
         await db.collection("apps").doc(id).delete();
     } else {
         await db.collection("apps").doc(id).update({ status: status });
     }
-    showAdminTab('pending');
+    alert(`App status updated to ${status}`);
 };
 
 const toggleFeature = async (id, currentStatus) => {
     await db.collection("apps").doc(id).update({ featured: !currentStatus });
-    showAdminTab('approved');
+    alert(`App feature status updated.`);
 };
 
 const deleteApp = async (id) => {
-    if(confirm('Delete permanently?')) {
+    if(confirm('This will PERMANENTLY DELETE the app. Are you sure?')) {
         await db.collection("apps").doc(id).delete();
-        showAdminTab('approved');
+        alert('App deleted successfully.');
     }
 };
+
 </script>
 </body>
-</html>
+    </html>
