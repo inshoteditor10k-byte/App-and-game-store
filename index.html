@@ -63,11 +63,15 @@
         gap: 8px;
         justify-content: center;
     }
+    .btn:disabled {
+        cursor: not-allowed;
+        opacity: 0.6;
+    }
     .btn-primary { background: linear-gradient(135deg, var(--primary), #ff7700); color: white; }
     .btn-secondary { background: #e0e0e0; color: #333; }
     .btn-danger { background: #ff4444; color: white; }
     .btn-success { background: var(--secondary); color: white; }
-    .btn:hover { transform: translateY(-2px); opacity: 0.9; }
+    .btn:hover:not(:disabled) { transform: translateY(-2px); opacity: 0.9; }
 
     /* Login Screen Styles */
     #authScreen {
@@ -120,7 +124,7 @@
     .logo { font-size: 1.5rem; font-weight: bold; color: var(--primary); display: flex; align-items: center; gap: 10px; }
     .logo span { color: var(--accent); }
     
-    /* Advanced Search Styles */
+    /* ======================= MODIFICATION START: Advanced Search Styles ======================= */
     .search-container {
         flex-grow: 1;
         max-width: 500px;
@@ -136,6 +140,8 @@
         display: flex;
         flex-wrap: wrap;
         align-items: center;
+        gap: 5px;
+        cursor: text;
     }
     .search-bar:focus-within {
         border-color: var(--primary);
@@ -174,7 +180,7 @@
         flex-grow: 1;
         border: none;
         outline: none;
-        padding: 8px 15px;
+        padding: 8px 10px;
         background: transparent;
         color: var(--text-color);
         min-width: 150px;
@@ -207,6 +213,15 @@
         height: 30px;
         border-radius: 6px;
     }
+    .suggestion-item .suggestion-type {
+        font-size: 0.7rem;
+        padding: 2px 6px;
+        border-radius: 4px;
+        background-color: var(--secondary);
+        color: white;
+        margin-left: auto;
+    }
+    /* ======================= MODIFICATION END ======================= */
 
 
     /* Hero */
@@ -285,7 +300,6 @@
     .screenshot-url-group { margin-top: 10px; }
     .screenshot-url-preview { display: none; height: 100px; border-radius: 8px; margin-top: 5px; }
     
-    /* ======================= MODIFICATION START: New Tag Input Styles for Upload Form ======================= */
     .tag-input-box {
         background: var(--bg-color);
         border: 1px solid var(--border-color);
@@ -310,8 +324,6 @@
         width: auto; /* Allow it to shrink */
         box-sizing: content-box; /* Fix padding issue */
     }
-    /* ======================= MODIFICATION END ======================= */
-
 
     /* Admin */
     .admin-dashboard { padding: 20px 5%; }
@@ -399,13 +411,15 @@
             AppPlus <span>Store</span>
         </div>
         
+        <!-- ======================= MODIFICATION START: Integrated Search Bar ======================= -->
         <div class="search-container">
-            <div class="search-bar">
+            <div class="search-bar" onclick="document.getElementById('searchInput').focus()">
                 <div id="tagContainer"></div>
                 <input type="text" id="searchInput" placeholder="Search for apps & games..." onkeyup="handleSearchInput(event)">
             </div>
             <div id="suggestionsDropdown" class="hidden"></div>
         </div>
+        <!-- ======================= MODIFICATION END ======================= -->
 
         <div style="display:flex; gap:10px; align-items:center;">
             <button class="btn btn-secondary" onclick="toggleTheme()" id="themeBtn">🌙</button>
@@ -495,7 +509,7 @@
                 <label>Developer Name *</label>
                 <input type="text" id="uDev" required>
             </div>
-            <div class="form-group">
+             <div class="form-group">
                 <label>Email (Optional)</label>
                 <input type="email" id="uEmail">
             </div>
@@ -537,14 +551,12 @@
                 <textarea id="uDesc" rows="3" required></textarea>
             </div>
 
-            <!-- ======================= MODIFICATION START: New Tag Input HTML for Upload Form ======================= -->
             <div class="form-group">
                 <label>Tags (Type a tag and press Enter) *</label>
-                <div id="uTagsContainer" class="tag-input-box">
+                <div id="uTagsContainer" class="tag-input-box" onclick="document.getElementById('uTagsInput').focus()">
                     <input type="text" id="uTagsInput" placeholder="e.g., Action, RPG, Fun...">
                 </div>
             </div>
-            <!-- ======================= MODIFICATION END ======================= -->
             
             <div class="form-group">
                 <label>App Logo URL (Square) *</label>
@@ -590,7 +602,7 @@
             WARNING: After payment, you MUST enter the EXACT Name & UPI ID shown in your payment history. If details do not match, verification will fail.
         </div>
 
-        <form onsubmit="finalizeTransaction(event)">
+        <form id="paymentVerificationForm" onsubmit="finalizeTransaction(event)">
             <h4 style="text-align:left; margin-bottom:10px;">Confirm Transaction Details</h4>
             <div class="form-group">
                 <label>Sender Name (Your Bank Name) *</label>
@@ -681,10 +693,7 @@ let currentUser = null;
 let currentCategory = 'All';
 let tempAppData = {}; 
 let activeSearchTags = [];
-// ======================= MODIFICATION START: State for new tag input =======================
 let uploadFormTags = [];
-// ======================= MODIFICATION END =======================
-
 
 // =======================================================
 // 1. AUTHENTICATION & PROFILE LOGIC
@@ -783,7 +792,7 @@ const openProfileModal = async () => {
 
 const saveUserUpi = async () => {
     const upi = document.getElementById('userUpi').value;
-    if(!upi.includes('@')) return alert("Invalid UPI ID");
+    if(!upi.includes('@')) return alert("Invalid UPI ID. It must contain '@'.");
     await db.collection('users').doc(currentUser.uid).update({ upiId: upi });
     alert("UPI ID Saved Successfully!");
 };
@@ -794,16 +803,14 @@ const saveUserUpi = async () => {
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
     addScreenshotField(); 
-    // Setup listeners
+    setupUploadTagsInput();
+    
     document.addEventListener('click', (event) => {
         const searchContainer = document.querySelector('.search-container');
         if (!searchContainer.contains(event.target)) {
-            document.getElementById('suggestionsDropdown').classList.add('hidden');
+            hideSuggestions();
         }
     });
-    // ======================= MODIFICATION START: Setup listener for new tag input =======================
-    setupUploadTagsInput();
-    // ======================= MODIFICATION END =======================
 });
 
 const loadAppsFromDB = () => {
@@ -846,20 +853,17 @@ const formatSize = (bytes) => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
-// ======================= MODIFICATION START: Clear tag array when modal opens =======================
 const openUploadModal = () => {
     document.getElementById('uploadForm').reset();
     document.getElementById('screenshotInputs').innerHTML = '';
     addScreenshotField();
     document.getElementById('logoPreview').style.display = 'none';
     
-    // Clear the tags from the previous session
     uploadFormTags = [];
-    renderUploadTags(); // Update the UI to show no tags
+    renderUploadTags(); 
 
     document.getElementById('uploadModal').classList.remove('hidden');
 };
-// ======================= MODIFICATION END =======================
 
 const closeModal = (id) => {
     document.getElementById(id).classList.add('hidden');
@@ -904,7 +908,6 @@ const togglePremiumInput = () => {
     document.getElementById('freeInfoDiv').classList.toggle('hidden', isPrem);
 };
 
-// ======================= MODIFICATION START: Use tag array on submit =======================
 const handleUploadStep1 = async (e) => {
     e.preventDefault();
     const btn = document.getElementById('uploadBtn');
@@ -918,14 +921,14 @@ const handleUploadStep1 = async (e) => {
     const cat = document.getElementById('uCat').value;
     const ver = document.getElementById('uVer').value;
     const desc = document.getElementById('uDesc').value;
-    const tags = uploadFormTags; // Use the array directly
+    const tags = uploadFormTags;
     const logoUrl = document.getElementById('uLogoUrl').value;
     const apkUrl = document.getElementById('uApkUrl').value.trim();
     
     const screenshots = Array.from(document.querySelectorAll('.ss-url-input')).map(input => input.value.trim()).filter(Boolean);
 
     const isPremium = document.getElementById('uIsPremium').checked;
-    const appPrice = isPremium ? document.getElementById('uPrice').value : 'Free';
+    const appPrice = isPremium ? document.getElementById('uPrice').value : '0';
     const listingFee = isPremium ? 100 : 10;
 
     if (!apkUrl) {
@@ -941,12 +944,31 @@ const handleUploadStep1 = async (e) => {
         btn.disabled = false;
         return;
     }
+    
+    if (isPremium && (!appPrice || appPrice <= 0)) {
+        alert("Premium apps must have a price greater than 0.");
+        btn.innerText = "Proceed to Payment";
+        btn.disabled = false;
+        return;
+    }
+     // Check if user has UPI ID for premium apps
+    if(isPremium){
+        const userDoc = await db.collection('users').doc(currentUser.uid).get();
+        if(!userDoc.data().upiId){
+            alert("You must set your UPI ID in your profile before submitting a premium app.");
+            openProfileModal();
+            btn.innerText = "Proceed to Payment";
+            btn.disabled = false;
+            return;
+        }
+    }
+
 
     try {
         tempAppData = {
             name, developer: dev, email, category: cat, version: ver, description: desc, tags,
             logo: logoUrl, screenshots, apkUrl, fileSize: null,
-            isPremium, appPrice, listingFee,
+            isPremium, appPrice: parseInt(appPrice), listingFee,
             downloads: 0, status: 'pending', featured: false, ratings: [],
             uploaderUid: currentUser.uid, date: new Date().toISOString()
         };
@@ -970,7 +992,6 @@ const handleUploadStep1 = async (e) => {
         btn.disabled = false;
     }
 };
-// ======================= MODIFICATION END =======================
 
 
 // =======================================================
@@ -978,46 +999,59 @@ const handleUploadStep1 = async (e) => {
 // =======================================================
 const finalizeTransaction = async (e) => {
     e.preventDefault();
+    const submitBtn = document.querySelector('#paymentVerificationForm button[type="submit"]');
+    submitBtn.disabled = true;
+    submitBtn.innerText = 'Verifying...';
     
     const context = document.getElementById('payContext').value;
     const senderName = document.getElementById('paySenderName').value;
     const senderUpi = document.getElementById('paySenderUpi').value;
 
-    if(!senderName || !senderUpi) return alert("Please fill payment details");
-
-    if (context === 'upload') {
-        tempAppData.paymentDetails = {
-            senderName, senderUpi,
-            amountPaid: tempAppData.listingFee,
-            type: 'listing_fee'
-        };
-
-        try {
-            await db.collection("apps").add(tempAppData);
-            alert('App Submitted for Review!');
-        } catch(err) {
-            alert("Error: " + err.message);
-        }
-        document.getElementById('uploadForm').reset();
-        tempAppData = {};
-
-    } else if (context === 'purchase') {
-        const appId = document.getElementById('payTargetId').value;
-        const app = apps.find(a => a.id === appId);
-        
-        try {
-            await db.collection('users').doc(app.uploaderUid).update({
-                earnings: firebase.firestore.FieldValue.increment(parseInt(app.appPrice))
-            });
-            startDownloadProcess(appId);
-            alert("Payment Verified! Download Starting...");
-        } catch(err) {
-            console.error(err);
-            alert("Error processing purchase. Contact Admin.");
-        }
+    if(!senderName || !senderUpi) {
+        alert("Please fill all payment details.");
+        submitBtn.disabled = false;
+        submitBtn.innerText = 'Submit Verification';
+        return;
     }
 
-    closeModal('paymentModal');
+    try {
+        if (context === 'upload') {
+            tempAppData.paymentDetails = {
+                senderName, senderUpi,
+                amountPaid: tempAppData.listingFee,
+                type: 'listing_fee'
+            };
+
+            await db.collection("apps").add(tempAppData);
+            alert('App Submitted for Review!');
+            tempAppData = {};
+
+        } else if (context === 'purchase') {
+            const appId = document.getElementById('payTargetId').value;
+            const app = apps.find(a => a.id === appId);
+            
+            // This is a manual verification system. The actual logic here
+            // confirms the user's action and proceeds to download.
+            // In a real system, a webhook would verify the payment.
+            // We also increment the developer's earnings.
+            await db.collection('users').doc(app.uploaderUid).update({
+                earnings: firebase.firestore.FieldValue.increment(app.appPrice)
+            });
+
+            alert("Payment Verified! Your download will start now.");
+            startDownloadProcess(appId, true); // Pass true to bypass button animation
+        }
+        
+        document.getElementById('paymentVerificationForm').reset();
+        closeModal('paymentModal');
+
+    } catch (err) {
+        alert("Error: " + err.message);
+        console.error(err);
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerText = 'Submit Verification';
+    }
 };
 
 const renderHome = () => {
@@ -1104,8 +1138,10 @@ const handleSearchInput = (event) => {
         addTag(value);
         input.value = '';
         hideSuggestions();
-    } else {
+    } else if (value.length > 1) {
         showSuggestions(value);
+    } else {
+        hideSuggestions();
     }
 };
 
@@ -1115,6 +1151,7 @@ const addTag = (tagText) => {
         activeSearchTags.push(cleanTag);
         renderTags();
         renderHome();
+        document.getElementById('searchInput').value = '';
     }
     hideSuggestions();
 };
@@ -1148,15 +1185,49 @@ const renderTags = () => {
 
 const showSuggestions = (query) => {
     const dropdown = document.getElementById('suggestionsDropdown');
-    if (!query) {
-        hideSuggestions();
-        return;
-    }
-
     const lowerQuery = query.toLowerCase();
-    const suggestions = apps
-        .filter(app => app.status === 'approved' && (app.name.toLowerCase().includes(lowerQuery) || (app.tags || []).some(t => t.toLowerCase().includes(lowerQuery))))
-        .slice(0, 5);
+
+    // 1. Collect all possible suggestions (app names and tags)
+    let potentialSuggestions = new Map();
+    apps.filter(app => app.status === 'approved').forEach(app => {
+        // Add app name
+        if (!potentialSuggestions.has(app.name.toLowerCase())) {
+            potentialSuggestions.set(app.name.toLowerCase(), { text: app.name, type: 'App', logo: app.logo });
+        }
+        // Add tags
+        (app.tags || []).forEach(tag => {
+            if (!potentialSuggestions.has(tag.toLowerCase())) {
+                potentialSuggestions.set(tag.toLowerCase(), { text: tag, type: 'Tag' });
+            }
+        });
+    });
+
+    // 2. Filter and score suggestions
+    const scoredSuggestions = Array.from(potentialSuggestions.values())
+        .map(s => {
+            const lowerText = s.text.toLowerCase();
+            let score = 0;
+            if (lowerText === lowerQuery) {
+                score = 3;
+            } else if (lowerText.startsWith(lowerQuery)) {
+                score = 2;
+            } else if (lowerText.includes(lowerQuery)) {
+                score = 1;
+            }
+            s.score = score;
+            return s;
+        })
+        .filter(s => s.score > 0);
+
+    // 3. Sort by score (desc) then alphabetically
+    scoredSuggestions.sort((a, b) => {
+        if (a.score !== b.score) {
+            return b.score - a.score;
+        }
+        return a.text.localeCompare(b.text);
+    });
+    
+    const suggestions = scoredSuggestions.slice(0, 6);
 
     if (suggestions.length === 0) {
         hideSuggestions();
@@ -1164,16 +1235,19 @@ const showSuggestions = (query) => {
     }
 
     dropdown.innerHTML = '';
-    suggestions.forEach(app => {
+    suggestions.forEach(sugg => {
         const item = document.createElement('div');
         item.className = 'suggestion-item';
-        item.onclick = () => {
-            addTag(app.name);
-            document.getElementById('searchInput').value = '';
-        };
+        item.onclick = () => addTag(sugg.text);
+        
+        const logoHtml = sugg.type === 'App' 
+            ? `<img src="${sugg.logo}" alt="${sugg.text}" onerror="this.src='https://via.placeholder.com/30'">`
+            : '';
+
         item.innerHTML = `
-            <img src="${app.logo}" alt="${app.name}" onerror="this.src='https://via.placeholder.com/30'">
-            <span>${app.name}</span>
+            ${logoHtml}
+            <span>${sugg.text}</span>
+            <span class="suggestion-type">${sugg.type}</span>
         `;
         dropdown.appendChild(item);
     });
@@ -1181,19 +1255,18 @@ const showSuggestions = (query) => {
     dropdown.classList.remove('hidden');
 };
 
+
 const hideSuggestions = () => {
     document.getElementById('suggestionsDropdown').classList.add('hidden');
 };
 
-// ======================= MODIFICATION START: New functions for upload form tags =======================
 const setupUploadTagsInput = () => {
     const input = document.getElementById('uTagsInput');
     const container = document.getElementById('uTagsContainer');
 
-    // Add a keydown listener to the input field
     input.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
-            event.preventDefault(); // Prevents the form from submitting
+            event.preventDefault(); 
             const value = input.value.trim();
             if (value) {
                 if (!uploadFormTags.includes(value)) {
@@ -1205,7 +1278,6 @@ const setupUploadTagsInput = () => {
         }
     });
 
-    // When the container is clicked, focus the input field
     container.addEventListener('click', () => {
         input.focus();
     });
@@ -1215,10 +1287,8 @@ const renderUploadTags = () => {
     const container = document.getElementById('uTagsContainer');
     const input = document.getElementById('uTagsInput');
     
-    // Clear all existing tags but not the input field itself
     container.querySelectorAll('.tag-item').forEach(tagEl => tagEl.remove());
 
-    // Re-render all tags from the array
     uploadFormTags.forEach(tag => {
         const tagEl = document.createElement('div');
         tagEl.className = 'tag-item';
@@ -1226,7 +1296,6 @@ const renderUploadTags = () => {
             <span>${tag}</span>
             <span class="remove-tag" onclick="removeUploadTag('${tag}')">&times;</span>
         `;
-        // Insert the tag element before the input field
         container.insertBefore(tagEl, input);
     });
 };
@@ -1235,8 +1304,6 @@ const removeUploadTag = (tagText) => {
     uploadFormTags = uploadFormTags.filter(t => t !== tagText);
     renderUploadTags();
 };
-// ======================= MODIFICATION END =======================
-
 
 const openDetail = (id) => {
     const app = apps.find(a => a.id === id);
@@ -1325,15 +1392,15 @@ const initiatePurchase = async (appId) => {
     const devUPI = devData.upiId;
 
     if (!devUPI) {
-        alert("Developer has not set up a UPI ID yet. Cannot purchase now.");
+        alert("Developer has not set up a UPI ID yet. This app cannot be purchased right now.");
         return;
     }
 
-    const upiLink = `upi://pay?pa=${devUPI}&pn=${devData.name}&am=${app.appPrice}&cu=INR&tn=BuyApp-${app.name}`;
+    const upiLink = `upi://pay?pa=${devUPI}&pn=${encodeURIComponent(devData.name)}&am=${app.appPrice}&cu=INR&tn=${encodeURIComponent('BuyApp-' + app.name)}`;
     document.getElementById('upiPayBtn').href = upiLink;
     document.getElementById('upiPayBtn').innerText = `Pay ₹${app.appPrice} to Developer`;
     document.getElementById('payTitle').innerText = `Buy ${app.name}`;
-    document.getElementById('payReceiverInfo').innerText = `Payment goes to: ${devData.name}`;
+    document.getElementById('payReceiverInfo').innerText = `Payment for '${app.name}' goes to: ${devData.name}`;
     document.getElementById('payContext').value = 'purchase';
     document.getElementById('payTargetId').value = appId;
 
@@ -1341,11 +1408,11 @@ const initiatePurchase = async (appId) => {
     document.getElementById('paymentModal').classList.remove('hidden');
 };
 
-const startDownloadProcess = (id) => {
+const startDownloadProcess = (id, fromPurchase = false) => {
     const app = apps.find(a => a.id === id);
     const btn = document.getElementById('dlBtn');
     
-    if(btn) {
+    if(btn && !fromPurchase) {
         btn.innerHTML = "Starting Download...";
         btn.classList.add('download-anim');
         btn.disabled = true;
@@ -1362,6 +1429,9 @@ const startDownloadProcess = (id) => {
             if(btn) {
                 btn.innerHTML = "Download Started!";
                 btn.classList.remove('download-anim');
+            }
+             if(fromPurchase){
+                closeModal('detailModal');
             }
         } catch(err) {
             console.error("Download error:", err);
@@ -1387,6 +1457,7 @@ const submitReview = async (id) => {
             ratings: firebase.firestore.FieldValue.arrayUnion(newRating)
         });
         alert("Review Submitted");
+        closeModal('detailModal');
         openDetail(id); 
     } catch(err) {
         console.error("Review Error", err);
@@ -1441,7 +1512,8 @@ const showAdminTab = (tab) => {
                         <td><b>${a.name}</b><br><small><a href="${a.apkUrl}" target="_blank">Test Link</a></small></td>
                         <td style="font-size:0.85rem;">
                             Name: <b>${a.paymentDetails?.senderName || 'N/A'}</b><br>
-                            UPI: <b>${a.paymentDetails?.senderUpi || 'N/A'}</b>
+                            UPI: <b>${a.paymentDetails?.senderUpi || 'N/A'}</b><br>
+                            Fee: <b>₹${a.listingFee || 'N/A'}</b>
                         </td>
                         <td>
                             <button class="btn btn-success" onclick="updateStatus('${a.id}', 'approved')">Verify</button>
@@ -1488,7 +1560,7 @@ const updateStatus = async (id, status) => {
     } else {
         await db.collection("apps").doc(id).update({ status: status });
     }
-    alert(`App status updated to ${status}`);
+    alert(`App status updated to ${status}.`);
 };
 
 const toggleFeature = async (id, currentStatus) => {
