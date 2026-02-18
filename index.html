@@ -785,7 +785,7 @@ const addScreenshotField = () => {
     newField.innerHTML = `
         <div class="url-input-group">
             <input type="text" class="ss-url-input" placeholder="Paste screenshot URL...">
-            <button type="button" class="btn btn-secondary" style="font-size:0.8rem;" onclick="previewImage(this.previousElementSibling, this.nextElementSibling.nextElementSibling)">Preview</button>
+            <button type="button" class="btn btn-secondary" style="font-size:0.8rem;" onclick="previewImage(this.previousElementSibling, this.parentElement.nextElementSibling)">Preview</button>
             <button type="button" class="btn btn-danger" style="padding: 5px 10px;" onclick="this.parentElement.parentElement.remove()">X</button>
         </div>
         <img class="screenshot-url-preview" src="" alt="Screenshot Preview">
@@ -1301,4 +1301,4 @@ const deleteApp = async (id) => {
 };
 </script>
 </body>
-    </html>
+</html>
