@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -238,7 +237,7 @@
     <script>
         // --- Configuration ---
         const firebaseConfig = {
-            apiKey: "AIzaSyBGuNz71J1GnFn6CUoVcnlN2KD0Ad10",
+            apiKey: "AIzaSyBGuNz71J1GnFn6CUoHVPVcnlN2KD0Ad10",
             authDomain: "ads-earning-4d8c7.firebaseapp.com",
             databaseURL: "https://ads-earning-4d8c7-default-rtdb.firebaseio.com",
             projectId: "ads-earning-4d8c7",
@@ -266,9 +265,6 @@
         const loadingSpinner = document.getElementById('loading-spinner');
         const welcomeMessage = document.getElementById('welcome-message');
 
-        // --- State Variables ---
-        let currentUser;
-
         // --- UI State Management ---
         /** Shows a specific view and hides all others */
         function showView(viewName) {
@@ -276,16 +272,14 @@
             if (views[viewName]) {
                 views[viewName].classList.add('active');
             }
-            // Reset message box when view changes
-            hideMessage();
+            hideMessage(); // Reset message box when view changes
         }
 
         /** Shows a temporary message in the message box */
         function showMessage(type, message) {
             messageBox.style.display = 'block';
             messageBox.textContent = message;
-            // Add a class for styling (e.g., error, success) based on type
-            // For simplicity here, just set text content.
+            // You might add class switching here for error vs success styling
             setTimeout(hideMessage, 5000); // Hide after 5 seconds
         }
 
@@ -304,48 +298,89 @@
             loadingSpinner.style.display = 'none';
         }
 
-        // --- Firebase Google Authentication Logic ---
-        /** Handles the Google sign-in process for both create and login flows. */
-        async function handleGoogleLogin(isCreatingAccount) {
+        /** Updates the dashboard view with user information */
+        function showDashboard(user) {
+            welcomeMessage.textContent = `Welcome back, ${user.displayName || user.email}!`;
+            showView('dashboardView');
+        }
+
+        // --- Firebase Google Redirect Authentication Logic ---
+        /** Stores the login intent in session storage and triggers the Google sign-in redirect. */
+        async function initiateGoogleLogin(isCreatingAccount) {
+            showLoading();
+            sessionStorage.setItem('authIntent', isCreatingAccount ? 'create' : 'login');
+            try {
+                await auth.signInWithRedirect(googleProvider);
+            } catch (error) {
+                console.error("Redirect initialization error:", error);
+                hideLoading();
+                showMessage('error', `Login failed to initiate: ${error.message}`);
+            }
+        }
+
+        /** Handles the result of the Google sign-in redirect on page load. */
+        async function handleRedirectResult() {
             showLoading();
             try {
-                const result = await auth.signInWithPopup(googleProvider);
-                const user = result.user;
-                currentUser = user; // Set global current user
+                const result = await auth.getRedirectResult();
 
-                const userRef = database.ref(`users/${user.uid}`);
-                const snapshot = await userRef.once('value');
+                if (result.user) {
+                    const user = result.user;
+                    const authIntent = sessionStorage.getItem('authIntent');
 
-                if (isCreatingAccount) {
-                    // Create Account Flow: Check if user already exists in DB
-                    if (snapshot.exists()) {
-                        showMessage('error', 'Account already exists. Please use "Already Have Account" to log in.');
-                        await auth.signOut(); // Force logout to prevent incorrect state
+                    // Clean up session storage immediately after retrieval
+                    sessionStorage.removeItem('authIntent');
+
+                    const userRef = database.ref(`users/${user.uid}`);
+                    const snapshot = await userRef.once('value');
+
+                    if (authIntent === 'create') {
+                        if (snapshot.exists()) {
+                            // Account already exists. This flow should prevent duplicate account creation.
+                            showMessage('error', 'Account already exists. Please use "Already Have Account" to log in.');
+                            await auth.signOut(); // Force logout to prevent incorrect state
+                            showView('mainMenu');
+                        } else {
+                            // New user: create database entry
+                            await userRef.set({
+                                uid: user.uid,
+                                email: user.email,
+                                name: user.displayName,
+                                createdAt: firebase.database.ServerValue.TIMESTAMP
+                            });
+                            showDashboard(user);
+                        }
+                    } else if (authIntent === 'login') {
+                        if (snapshot.exists()) {
+                            // Existing user: proceed to dashboard
+                            showDashboard(user);
+                        } else {
+                            // User not found in database.
+                            showMessage('error', 'Account not found. Please create a new account first.');
+                            await auth.signOut(); // Force logout to prevent incorrect state
+                            showView('mainMenu');
+                        }
                     } else {
-                        // Create new user entry in database
-                        await userRef.set({
-                            uid: user.uid,
-                            email: user.email,
-                            name: user.displayName,
-                            createdAt: firebase.database.ServerValue.TIMESTAMP
-                        });
-                        welcomeMessage.textContent = `Welcome, ${user.displayName}!`;
-                        showView('dashboardView');
+                        // Unexpected state, just show dashboard if user is authenticated
+                        showDashboard(user);
                     }
+                } else if (!result.user && sessionStorage.getItem('authIntent')) {
+                    // This scenario might occur if the user cancelled the login process after the redirect.
+                    sessionStorage.removeItem('authIntent');
+                    showMessage('info', 'Login process cancelled or failed. Please try again.');
+                    showView('mainMenu');
                 } else {
-                    // Login Flow: Check if user exists in DB
-                    if (snapshot.exists()) {
-                        welcomeMessage.textContent = `Welcome back, ${user.displayName}!`;
-                        showView('dashboardView');
-                    } else {
-                        showMessage('error', 'Account not found. Please create a new account first.');
-                        await auth.signOut(); // Force logout
-                    }
+                    // No redirect result or intent, check for existing session
+                    auth.onAuthStateChanged(user => {
+                        if (user) showDashboard(user);
+                        else showView('mainMenu');
+                    });
                 }
-
             } catch (error) {
                 console.error("Authentication Error:", error);
+                sessionStorage.removeItem('authIntent');
                 showMessage('error', `Login failed: ${error.message}`);
+                showView('mainMenu');
             } finally {
                 hideLoading();
             }
@@ -355,7 +390,6 @@
         async function signOutUser() {
             try {
                 await auth.signOut();
-                currentUser = null;
                 showView('mainMenu');
                 showMessage('success', 'You have been logged out.');
             } catch (error) {
@@ -468,7 +502,6 @@
             try {
                 await auth.currentUser.updatePassword(newPassword);
                 showMessage('success', 'Password updated successfully!');
-                showView('adminDashboardView'); // Return to dashboard view
                 views.changePasswordForm.classList.remove('active'); // Hide change form
             } catch (error) {
                 showMessage('error', `Failed to update password: ${error.message}`);
@@ -477,16 +510,10 @@
             }
         }
 
-        /** Logout admin (only logs out the admin user, not the main user if different) */
+        /** Logout admin (only logs out the admin user) */
         function logoutAdmin() {
-            showView('dashboardView'); // Return to main user dashboard
-            // Note: The main user (Google sign-in) stays logged in, only the admin view changes.
-            // If the admin user is separate, we would sign out specifically the admin user.
-            // To be thorough, we should ensure the admin user is signed out from Firebase Auth.
-            // Since we're using a single auth instance, this gets complex with two separate users.
-            // For simplicity in this demo, let's assume admin login is a special view for the main user, OR
-            // If we implement proper admin signout, it will sign out whoever is currently authenticated.
-            // Let's implement full logout to simplify state management.
+            // Check if current user is indeed admin before signing out (or sign out current user)
+            // For simplicity in this example, we'll sign out the current user and return to dashboard.
             auth.signOut().then(() => {
                 showView('mainMenu');
                 showMessage('success', 'Admin session ended. You are now logged out completely.');
@@ -501,9 +528,12 @@
             database = firebase.database();
             googleProvider = new firebase.auth.GoogleAuthProvider();
 
-            // Main Menu Events
-            document.getElementById('btn-create-account').addEventListener('click', () => handleGoogleLogin(true));
-            document.getElementById('btn-already-have-account').addEventListener('click', () => handleGoogleLogin(false));
+            // Handle redirect result on page load first
+            handleRedirectResult();
+
+            // Main Menu Events (Google sign-in with redirect)
+            document.getElementById('btn-create-account').addEventListener('click', () => initiateGoogleLogin(true));
+            document.getElementById('btn-already-have-account').addEventListener('click', () => initiateGoogleLogin(false));
 
             // Dashboard Events
             document.getElementById('btn-home').addEventListener('click', () => showMessage('info', 'Home functionality not implemented yet.'));
@@ -525,18 +555,7 @@
             document.getElementById('btn-change-admin-password').addEventListener('click', () => views.changePasswordForm.classList.add('active'));
             document.getElementById('btn-cancel-password-change').addEventListener('click', () => views.changePasswordForm.classList.remove('active'));
             document.getElementById('btn-update-admin-password').addEventListener('click', changeAdminPassword);
-
-            // Handle initial state on page load (check if user is already logged in via persistent state)
-            auth.onAuthStateChanged(user => {
-                if (user) {
-                    currentUser = user;
-                    welcomeMessage.textContent = `Welcome back, ${user.displayName}!`;
-                    showView('dashboardView');
-                } else {
-                    showView('mainMenu');
-                }
-            });
         });
     </script>
 </body>
-</html>
+    </html>
